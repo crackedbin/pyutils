@@ -41,23 +41,18 @@ def delete_dir(dirpath):
 	shutil.rmtree(dirpath, ignore_errors=True)
 
 def delete_file(filepath):
-	try:
-		os.remove(filepath)
-	except FileNotFoundError:
-		pass
+	if not os.path.exists(filepath): return
+	os.remove(filepath)
 
 def mvdir(src, dst):
 	shutil.move(src, dst)
 
 def mkdir(path, parent=True):
 	if os.path.exists(path): return
-	try:
-		if parent:
-			os.makedirs(path)
-		else:
-			os.mkdir(path)
-	except:
-		pass
+	if parent:
+		os.makedirs(path)
+	else:
+		os.mkdir(path)
 
 def find_all_files_by_suffix(target_dir:str, suffix:str):
     result = []
