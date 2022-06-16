@@ -1,7 +1,7 @@
 
 __all__ = [
-    "PyUtilException"
+    "PyUtilsException"
 ]
 
-class PyUtilException(Exception):
+class PyUtilsException(Exception):
     '''PyUtilException'''
