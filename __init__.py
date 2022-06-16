@@ -1,6 +1,7 @@
 
 import sys
 
+from .file import *
 from .exception import *
 
 # 检查版本
