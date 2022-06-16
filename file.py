@@ -2,7 +2,7 @@
 import os
 import shutil
 
-from . import PyUtilsException
+from .exception import PyUtilsException
 
 __all__ = [
     "read_file", "write_file", "mkdir", "mvdir", "find_all_files_by_suffix",
