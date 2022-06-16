@@ -2,10 +2,17 @@
 import os
 import shutil
 
+from . import PyUtilsException
+
 __all__ = [
     "read_file", "write_file", "mkdir", "mvdir", "find_all_files_by_suffix",
-    "delete_dir", "delete_file"
+    "delete_dir", "delete_file", 
+	"PyUtilsFileSysException"
 ]
+
+class PyUtilsFileSysException(PyUtilsException):
+	'''PyUtilsFileSysException'''
+
 
 def _open(file, mode):
 	if not 'b' in mode:
