@@ -152,8 +152,6 @@ class LoggerBase(object):
         self.enable_stream(enable_stream)
         self.enable_file(enable_file)
         self.setLevel(LoggerBase.DEFAULT_LOGGING_LEVEL)
-
-        self.__create_channel(LoggerBase.DEFAULT_CHANNEL_NAME)
         
     def __del__(self):
         if self.__registered:
