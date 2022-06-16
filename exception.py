@@ -1,0 +1,3 @@
+
+class PyUtilException(Exception):
+    '''PyUtilException'''
