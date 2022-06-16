@@ -4,6 +4,7 @@ import sys
 from .file import *
 from .exception import *
 from .logger import *
+from .misc import *
 
 # 检查版本
 
