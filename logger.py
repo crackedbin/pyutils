@@ -8,14 +8,11 @@ import importlib
 from logging import LogRecord, handlers
 
 from .file import mkdir
-from .exception import PyUtilsException
+from .exception import LoggerException
 
 __all__ = [
-    'PyUtilsLoggerException', 'LoggerBase'
+    'LoggerBase'
 ]
-
-class PyUtilsLoggerException(PyUtilsException):
-    '''PyUtilsLoggerException'''
 
 class BaseStreamFormatter(logging.Formatter):
     '''
@@ -135,7 +132,7 @@ class LoggerBase(object):
             self.__logger_name = logger_name
         
         if self.__logger_name in LoggerBase.__loggers:
-            raise PyUtilsLoggerException(f"duplicate logger name: {self.__logger_name}")
+            raise LoggerException(f"duplicate logger name: {self.__logger_name}")
 
         LoggerBase.__loggers.add(self.__logger_name)
         self.__registered = True
@@ -159,7 +156,7 @@ class LoggerBase(object):
 
     def __create_channel(self, name:str):
         if name in self.__channels:
-            raise PyUtilsLoggerException(f"duplicate logger channel name: {name}")
+            raise LoggerException(f"duplicate logger channel name: {name}")
         self.__channels[name] = LoggerChannel(name, self.__logger)
 
     def channel(self, name:str=''):
