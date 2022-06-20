@@ -163,6 +163,9 @@ class LoggerBase(object):
         name = name if name else LoggerBase.DEFAULT_CHANNEL_NAME
         if name not in self.__channels: self.__create_channel(name)
         return self.__channels[name]
+    
+    def channel_names(self) -> list[str]:
+        return list(self.__channels.keys())
 
     @classmethod
     def set_default_log_dir(cls, dirpath:os.PathLike):
