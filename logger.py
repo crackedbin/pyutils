@@ -6,6 +6,7 @@ import logging
 import importlib
 
 from logging import LogRecord, handlers
+from typing import Iterable
 
 from .file import mkdir
 from .exception import LoggerException
@@ -13,6 +14,14 @@ from .exception import LoggerException
 __all__ = [
     'LoggerBase'
 ]
+
+class LoggerLevel:
+
+    DEBUG       = logging.DEBUG
+    INFO        = logging.INFO
+    WARNING     = logging.WARNING
+    ERROR       = logging.ERROR
+    CRITICAL    = logging.CRITICAL
 
 class BaseStreamFormatter(logging.Formatter):
     '''
@@ -64,7 +73,7 @@ class LoggerChannel:
     def disable(self):
         self.__enable = False
 
-    def log(self, msg, level=logging.INFO):
+    def log(self, msg, level=LoggerLevel.INFO):
         if not self.__enable: return
         self.__logger.log(level, msg)
 
@@ -82,6 +91,27 @@ class LoggerChannel:
 
     def critical(self, msg):
         self.log(msg, LoggerBase.CRITICAL)
+    
+    def log_col(self, msgs:Iterable, width:int, spliter:str='|', level=LoggerLevel.INFO):
+        msgs = [ f"{str(m).ljust(width)}" for m in msgs]
+        msg = spliter.join(msgs)
+        self.log(msg, level)
+    
+    def debug_col(self, msgs:Iterable, width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LoggerBase.DEBUG)
+    
+    def info_col(self, msgs:Iterable, width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LoggerBase.INFO)
+    
+    def warning_col(self, msgs:Iterable, width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LoggerBase.WARNING)
+    
+    def error_col(self, msgs:Iterable, width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LoggerBase.ERROR)
+    
+    def critical_col(self, msgs:Iterable, width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LoggerBase.CRITICAL)
+
 
 class LoggerBase(object):
     '''
@@ -91,11 +121,11 @@ class LoggerBase(object):
         `LoggerBase.__init__(self, type(self).__name__, extend_name=<unique name>)`
     '''
 
-    DEBUG       = logging.DEBUG
-    INFO        = logging.INFO
-    WARNING     = logging.WARNING
-    ERROR       = logging.ERROR
-    CRITICAL    = logging.CRITICAL
+    DEBUG       = LoggerLevel.DEBUG
+    INFO        = LoggerLevel.INFO
+    WARNING     = LoggerLevel.WARNING
+    ERROR       = LoggerLevel.ERROR
+    CRITICAL    = LoggerLevel.CRITICAL
 
     # https://docs.python.org/zh-cn/3/library/logging.handlers.html#timedrotatingfilehandler
     FILE_ROATING_WHEN       = 'H'
@@ -239,3 +269,22 @@ class LoggerBase(object):
     def critical(self, msg, channel_name:str=''):
         self.log(msg, LoggerBase.CRITICAL, channel_name)
     
+    def log_col(self, msgs:Iterable, width:int, spliter:str='|', level=LoggerLevel.INFO, channel_name:str=''):
+        msgs = [ f"{str(m).ljust(width)}" for m in msgs]
+        msg = spliter.join(msgs)
+        self.log(msg, level, channel_name)
+    
+    def debug_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
+        self.log_col(msgs, width, spliter, LoggerBase.DEBUG, channel_name)
+    
+    def info_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
+        self.log_col(msgs, width, spliter, LoggerBase.INFO, channel_name)
+    
+    def warning_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
+        self.log_col(msgs, width, spliter, LoggerBase.WARNING, channel_name)
+    
+    def error_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
+        self.log_col(msgs, width, spliter, LoggerBase.ERROR, channel_name)
+    
+    def critical_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
+        self.log_col(msgs, width, spliter, LoggerBase.CRITICAL, channel_name)
