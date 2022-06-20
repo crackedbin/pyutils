@@ -5,3 +5,9 @@ __all__ = [
 
 class PyUtilsException(Exception):
     '''PyUtilException'''
+
+class MiscException(PyUtilsException):
+    '''MiscException'''
+
+class NoItem(MiscException):
+    '''NoItem'''

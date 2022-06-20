@@ -7,6 +7,8 @@ import hashlib
 from typing import Union
 from pathlib import Path
 
+from .exception import NoItem
+
 __all__ = [
     "safe_uuid", "percent", "ProbCalculator",
     "md5_file", "md5_dir"
@@ -77,15 +79,21 @@ class ProbCalculator:
         self.__stable = True
         
     def get(self):
+        if not self.__items:
+            raise NoItem("no item in ProbCalculator")
         self.__do_calculate()
         random_num = random.randrange(0, self.__precision)
         item = None
         for item_range, item in self.__items_with_range:
-            #print(f"{random_num} - {item_range}")
             if random_num in item_range: return item
         if not item: item = random.choice(self.__items)
         assert item
         return item 
+    
+    def pop(self):
+        item = self.get()
+        self.remove(item)
+        return item
     
     def empty(self):
         return not bool(self.__items)
