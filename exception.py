@@ -1,6 +1,7 @@
 
 __all__ = [
-    "PyUtilsException"
+    "PyUtilsException", "FileException", "LoggerException", "MiscException",
+    "NoItem"
 ]
 
 class PyUtilsException(Exception):
