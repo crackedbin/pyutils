@@ -139,9 +139,6 @@ class LoggerBase(object):
     # 日志存放目录
     __log_dir = None
 
-    # 记录已经实例化的logger name
-    __loggers:set[str] = set()
-
     DEFAULT_CHANNEL_NAME = 'default'
 
     def __init__(
@@ -151,8 +148,6 @@ class LoggerBase(object):
         self.__log_dirname:str    = log_dirname if log_dirname else logger_name
         self.__log_filename:str   = log_filename if log_filename else f"{logger_name}.log"
 
-        self.__registered = False
-
         # extend_name的作用是防止多进程日志重复问题,当一个类多线程运行时,如果logger name相同
         # 则会造成logger相互影响
         self.__logger_name = logger_name
@@ -160,12 +155,6 @@ class LoggerBase(object):
             self.__logger_name = f"{logger_name}-{extend_name}"
         else:
             self.__logger_name = logger_name
-        
-        if self.__logger_name in LoggerBase.__loggers:
-            raise LoggerException(f"duplicate logger name: {self.__logger_name}")
-
-        LoggerBase.__loggers.add(self.__logger_name)
-        self.__registered = True
 
         self.__logger:logging.Logger = logging.getLogger(self.__logger_name)
         
@@ -179,10 +168,6 @@ class LoggerBase(object):
         self.enable_stream(enable_stream)
         self.enable_file(enable_file)
         self.setLevel(LoggerBase.DEFAULT_LOGGING_LEVEL)
-        
-    def __del__(self):
-        if self.__registered:
-            LoggerBase.__loggers.remove(self.__logger_name)
 
     def __create_channel(self, name:str):
         if name in self.__channels:
