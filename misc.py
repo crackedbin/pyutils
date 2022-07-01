@@ -6,12 +6,13 @@ import hashlib
 
 from typing import Union
 from pathlib import Path
+from collections import MutableMapping
 
 from .exception import NoItem
 
 __all__ = [
     "safe_uuid", "percent", "ProbCalculator",
-    "md5_file", "md5_dir"
+    "md5_file", "md5_dir", "RandomDict"
 ]
 
 def safe_uuid():
@@ -120,3 +121,81 @@ def md5_update_from_dir(directory: Union[str, Path], hash: hashlib._Hash) -> has
 
 def md5_dir(directory: Union[str, Path]) -> str:
     return str(md5_update_from_dir(directory, hashlib.md5()).hexdigest())
+
+class RandomDict(MutableMapping):
+    def __init__(self, *args, **kwargs):
+        """ Create RandomDict object with contents specified by arguments.
+        Any argument
+        :param *args:       dictionaries whose contents get added to this dict
+        :param **kwargs:    key, value pairs will be added to this dict
+        """
+        # mapping of keys to array positions
+        self.__keys = {}
+        self.__values = []
+        self.__last_index = -1
+
+        self.update(*args, **kwargs)
+
+    def __setitem__(self, key, val):
+        if key in self.__keys:
+            i = self.__keys[key]
+        else:
+            self.__last_index += 1
+            i = self.__last_index
+
+        self.__values.append((key, val))
+        self.__keys[key] = i
+    
+    def __delitem__(self, key):
+        if not key in self.__keys:
+            raise KeyError
+
+        # index of item to delete is i
+        i = self.__keys[key]
+        # last item in values array is
+        move_key, move_val = self.__values.pop()
+
+        if i != self.__last_index:
+            # we move the last item into its location
+            self.__values[i] = (move_key, move_val)
+            self.__keys[move_key] = i
+        # else it was the last item and we just throw
+        # it away
+
+        # shorten array of values
+        self.__last_index -= 1
+        # remove deleted key
+        del self.__keys[key]
+    
+    def __getitem__(self, key):
+        if not key in self.__keys:
+            raise KeyError
+
+        i = self.__keys[key]
+        return self.__values[i][1]
+
+    def __iter__(self):
+        return iter(self.__keys)
+
+    def __len__(self):
+        return self.__last_index + 1
+
+    def __str__(self):
+        return str(self.__values)
+
+    def random_key(self):
+        """ Return a random key from this dictionary in O(1) time """
+        if len(self) == 0:
+            raise KeyError("RandomDict is empty")
+        
+        i = random.randint(0, self.__last_index)
+        return self.__values[i][0]
+
+    def random_value(self):
+        """ Return a random value from this dictionary in O(1) time """
+        return self[self.random_key()]
+
+    def random_item(self):
+        """ Return a random key-value pair from this dictionary in O(1) time """
+        k = self.random_key()
+        return k, self[k]
