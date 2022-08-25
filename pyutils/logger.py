@@ -9,10 +9,11 @@ from logging import LogRecord, handlers
 from typing import Iterable
 
 from .file import mkdir
+from .misc import safe_uuid
 from .exception import LoggerException
 
 __all__ = [
-    'LoggerBase'
+    'SimpleLogger'
 ]
 
 class LoggerLevel:
@@ -42,11 +43,11 @@ class BaseStreamFormatter(logging.Formatter):
         super().__init__(fmt=fmt, datefmt=datefmt, style=style, validate=validate)
         constants = BaseStreamFormatter.COLOR_CONSTANTS
         self.FORMATS = {
-            LoggerBase.DEBUG   : f"{constants['DEBUG']}{fmt}{constants['ENDC']}",
-            LoggerBase.INFO    : f"{constants['INFO']}{fmt}{constants['ENDC']}",
-            LoggerBase.WARNING : f"{constants['WARNING']}{fmt}{constants['ENDC']}",
-            LoggerBase.ERROR   : f"{constants['ERROR']}{fmt}{constants['ENDC']}",
-            LoggerBase.CRITICAL: f"{constants['CRITICAL']}{fmt}{constants['ENDC']}",
+            SimpleLogger.DEBUG   : f"{constants['DEBUG']}{fmt}{constants['ENDC']}",
+            SimpleLogger.INFO    : f"{constants['INFO']}{fmt}{constants['ENDC']}",
+            SimpleLogger.WARNING : f"{constants['WARNING']}{fmt}{constants['ENDC']}",
+            SimpleLogger.ERROR   : f"{constants['ERROR']}{fmt}{constants['ENDC']}",
+            SimpleLogger.CRITICAL: f"{constants['CRITICAL']}{fmt}{constants['ENDC']}",
         }
     
     def format(self, record:LogRecord) -> str:
@@ -78,19 +79,19 @@ class LoggerChannel:
         self.__logger.log(level, msg)
 
     def debug(self, msg):
-        self.log(msg, LoggerBase.DEBUG)
+        self.log(msg, SimpleLogger.DEBUG)
 
     def info(self, msg):
-        self.log(msg, LoggerBase.INFO)
+        self.log(msg, SimpleLogger.INFO)
 
     def warning(self, msg):
-        self.log(msg, LoggerBase.WARNING)
+        self.log(msg, SimpleLogger.WARNING)
 
     def error(self, msg):
-        self.log(msg, LoggerBase.ERROR)
+        self.log(msg, SimpleLogger.ERROR)
 
     def critical(self, msg):
-        self.log(msg, LoggerBase.CRITICAL)
+        self.log(msg, SimpleLogger.CRITICAL)
     
     def log_col(self, msgs:Iterable, width:int, spliter:str='|', level=LoggerLevel.INFO):
         msgs = [ f"{str(m).ljust(width)}" for m in msgs]
@@ -98,27 +99,28 @@ class LoggerChannel:
         self.log(msg, level)
     
     def debug_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LoggerBase.DEBUG)
+        self.log_col(msgs, width, spliter, SimpleLogger.DEBUG)
     
     def info_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LoggerBase.INFO)
+        self.log_col(msgs, width, spliter, SimpleLogger.INFO)
     
     def warning_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LoggerBase.WARNING)
+        self.log_col(msgs, width, spliter, SimpleLogger.WARNING)
     
     def error_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LoggerBase.ERROR)
+        self.log_col(msgs, width, spliter, SimpleLogger.ERROR)
     
     def critical_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LoggerBase.CRITICAL)
+        self.log_col(msgs, width, spliter, SimpleLogger.CRITICAL)
 
 
-class LoggerBase(object):
+class SimpleLogger(object):
     '''
-        子类要使用该接口的功能,需要在`__init__`中调用`LoggerBase.__init__(self, type(self).__name__)`。
+        SimpleLogger推荐当作基类使用，也可以单独使用。
+        子类要使用该接口的功能,需要在`__init__`中调用`SimpleLogger.__init__(self, type(self).__name__)`。
         
         如果子类有多个实例同时运行且需要对这些实例进行区分,可以调用
-        `LoggerBase.__init__(self, type(self).__name__, extend_name=<unique name>)`
+        `SimpleLogger.__init__(self, type(self).__name__, extend_name=<unique name>)`
     '''
 
     DEBUG       = LoggerLevel.DEBUG
@@ -167,7 +169,7 @@ class LoggerBase(object):
         self.__logger.propagate = False # 如果该属性为True,日志消息会传递到更高级的记录器中(比如根记录器)导致日志被多次打印输出。
         self.enable_stream(enable_stream)
         self.enable_file(enable_file)
-        self.setLevel(LoggerBase.DEFAULT_LOGGING_LEVEL)
+        self.setLevel(SimpleLogger.DEFAULT_LOGGING_LEVEL)
 
     def __create_channel(self, name:str):
         if name in self.__channels:
@@ -175,7 +177,7 @@ class LoggerBase(object):
         self.__channels[name] = LoggerChannel(name, self.__logger)
 
     def channel(self, name:str=''):
-        name = name if name else LoggerBase.DEFAULT_CHANNEL_NAME
+        name = name if name else SimpleLogger.DEFAULT_CHANNEL_NAME
         if name not in self.__channels: self.__create_channel(name)
         return self.__channels[name]
     
@@ -196,7 +198,7 @@ class LoggerBase(object):
         if enable:
             self.__stream_handler = logging.StreamHandler()
             self.__stream_handler.setFormatter(BaseStreamFormatter(
-                LoggerBase.STREAM_FORMAT
+                SimpleLogger.STREAM_FORMAT
             ))
             self.__logger.addHandler(self.__stream_handler)
         elif self.__stream_handler:
@@ -214,13 +216,13 @@ class LoggerBase(object):
             mkdir(file_log_dir)
             self.__file_handler = handlers.TimedRotatingFileHandler(
                 filename    = file_log_path, 
-                when        = LoggerBase.FILE_ROATING_WHEN, 
-                interval    = LoggerBase.FILE_ROATING_INTERVAL, 
-                backupCount = LoggerBase.FILE_ROATING_BACKCOUNT, 
+                when        = SimpleLogger.FILE_ROATING_WHEN, 
+                interval    = SimpleLogger.FILE_ROATING_INTERVAL, 
+                backupCount = SimpleLogger.FILE_ROATING_BACKCOUNT, 
                 encoding    = 'utf-8'
             )
             self.__file_handler.setFormatter(logging.Formatter(
-                LoggerBase.FILE_FORMAT
+                SimpleLogger.FILE_FORMAT
             ))
             self.__file_handler.setLevel(logging.INFO)
             self.__logger.addHandler(self.__file_handler)
@@ -240,19 +242,19 @@ class LoggerBase(object):
         self.channel(channel_name).log(msg, level)
 
     def debug(self, msg, channel_name:str=''):
-        self.log(msg, LoggerBase.DEBUG, channel_name)
+        self.log(msg, SimpleLogger.DEBUG, channel_name)
 
     def info(self, msg, channel_name:str=''):
-        self.log(msg, LoggerBase.INFO, channel_name)
+        self.log(msg, SimpleLogger.INFO, channel_name)
 
     def warning(self, msg, channel_name:str=''):
-        self.log(msg, LoggerBase.WARNING, channel_name)
+        self.log(msg, SimpleLogger.WARNING, channel_name)
 
     def error(self, msg, channel_name:str=''):
-        self.log(msg, LoggerBase.ERROR, channel_name)
+        self.log(msg, SimpleLogger.ERROR, channel_name)
 
     def critical(self, msg, channel_name:str=''):
-        self.log(msg, LoggerBase.CRITICAL, channel_name)
+        self.log(msg, SimpleLogger.CRITICAL, channel_name)
     
     def log_col(self, msgs:Iterable, width:int, spliter:str='|', level=LoggerLevel.INFO, channel_name:str=''):
         msgs = [ f"{str(m).ljust(width)}" for m in msgs]
@@ -260,16 +262,20 @@ class LoggerBase(object):
         self.log(msg, level, channel_name)
     
     def debug_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.log_col(msgs, width, spliter, LoggerBase.DEBUG, channel_name)
+        self.log_col(msgs, width, spliter, SimpleLogger.DEBUG, channel_name)
     
     def info_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.log_col(msgs, width, spliter, LoggerBase.INFO, channel_name)
+        self.log_col(msgs, width, spliter, SimpleLogger.INFO, channel_name)
     
     def warning_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.log_col(msgs, width, spliter, LoggerBase.WARNING, channel_name)
+        self.log_col(msgs, width, spliter, SimpleLogger.WARNING, channel_name)
     
     def error_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.log_col(msgs, width, spliter, LoggerBase.ERROR, channel_name)
+        self.log_col(msgs, width, spliter, SimpleLogger.ERROR, channel_name)
     
     def critical_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.log_col(msgs, width, spliter, LoggerBase.CRITICAL, channel_name)
+        self.log_col(msgs, width, spliter, SimpleLogger.CRITICAL, channel_name)
+    
+    @staticmethod
+    def for_current_file():
+        return SimpleLogger(os.path.basename(__file__))
