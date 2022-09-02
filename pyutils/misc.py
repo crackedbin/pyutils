@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 import random
 import hashlib
@@ -11,8 +12,8 @@ from collections import MutableMapping
 from .exception import NoItem
 
 __all__ = [
-    "safe_uuid", "percent", "ProbCalculator",
-    "md5_file", "md5_dir", "RandomDict"
+    "safe_uuid", "percent", "ProbCalculator","md5_file", "md5_dir", 
+    "RandomDict", 'NumberRangeEnd', 'NumberRange'
 ]
 
 def safe_uuid():
@@ -199,3 +200,183 @@ class RandomDict(MutableMapping):
         """ Return a random key-value pair from this dictionary in O(1) time """
         k = self.random_key()
         return k, self[k]
+
+class NumberRangeEnd:
+
+    LEFT    = 1
+    RIGHT   = 2
+
+    def __init__(
+        self, value:Union[int, float], closed:bool, 
+        position:Union[NumberRangeEnd.LEFT, NumberRangeEnd.RIGHT]
+    ):
+        self.__value = value
+        self.__closed = closed
+        self.__position = position
+        assert self.__position in [NumberRangeEnd.LEFT, NumberRangeEnd.RIGHT]
+
+    def __repr__(self):
+        if self.closed:
+            return f"[{self.value}]"
+        else:
+            return f"({self.value})"
+
+    def __eq__(self, item:NumberRangeEnd):
+        assert self.__position == item.__position
+        return self.value == item.value and self.closed == item.closed
+    
+    def __lt__(self, item:NumberRangeEnd):
+        assert self.__position == item.__position
+        if self.value < item.value:
+            return True
+        
+
+        if self.value == item.value :
+            if not self.closed and item.closed:
+                if self.__position == NumberRangeEnd.RIGHT:
+                    return True
+            elif self.closed and not item.closed:
+                if self.__position == NumberRangeEnd.LEFT:
+                    return True
+        
+        return False
+
+    def __gt__(self, item:NumberRangeEnd):
+        assert self.__position == item.__position
+        if self.value > item.value:
+            return True
+        
+        if self.value == item.value:
+            if self.closed and not item.closed:
+                if self.__position == NumberRangeEnd.RIGHT:
+                    return True
+            elif not self.closed and item.closed:
+                if self.__position == NumberRangeEnd.LEFT:
+                    return True
+        
+        return False
+    
+    def __le__(self, item:NumberRangeEnd):
+        assert self.__position == item.__position
+        return self == item or self < item
+    
+    def __ge__(self, item:NumberRangeEnd):
+        assert self.__position == item.__position
+        return self == item or self > item
+
+    def __ne__(self, item:NumberRangeEnd):
+        assert self.__position == item.__position
+        return not (self == item)
+    
+    @property
+    def value(self):
+        return self.__value
+    
+    @property
+    def closed(self):
+        return self.__closed
+
+    def is_left(self):
+        return self.__position == NumberRangeEnd.LEFT
+    
+    def is_right(self):
+        return self.__position == NumberRangeEnd.RIGHT
+    
+    @staticmethod
+    def left(value:Union[int, float], closed:bool):
+        return NumberRangeEnd(value, closed, NumberRangeEnd.LEFT)
+
+    @staticmethod
+    def right(value:Union[int, float], closed:bool):
+        return NumberRangeEnd(value, closed, NumberRangeEnd.RIGHT)
+
+class NumberRange:
+
+    STATUS_OK               = 1
+    STATUS_LEFT_NONE        = 2
+    STATUS_RIGHT_NONE       = 3
+    STATUS_BOTH_NONE        = 4
+    STATUS_INVALID_VALUE    = 5
+    
+    def __init__(self, left:NumberRangeEnd, right:NumberRangeEnd):
+        self.__left = left
+        self.__right = right
+        assert self.status != NumberRange.STATUS_INVALID_VALUE
+    
+    def __repr__(self) -> str:
+        pre = '[' if self.left.closed else '('
+        suf = ']' if self.right.closed else ')'
+        return f"{pre}{self.left.value}, {self.right.value}{suf}"
+
+    __str__ : __repr__
+
+    def __contains__(self, item:Union[NumberRange, int]):
+        assert self.valid
+        if type(item) is int:
+            left = NumberRangeEnd(item, True, NumberRangeEnd.LEFT)
+            right = NumberRangeEnd(item, True, NumberRangeEnd.RIGHT)
+            return NumberRange(left, right) in self
+        return self.left <= item.left and self.right >= item.right
+
+    @property
+    def left(self):
+        return self.__left
+    
+    @property
+    def right(self):
+        return self.__right
+
+    @property
+    def valid(self):
+        return self.status == NumberRange.STATUS_OK
+
+    @property
+    def status(self):
+        if self.left.value is None and self.right.value is None:
+            return NumberRange.STATUS_BOTH_NONE
+
+        if self.left.value is None:
+            return NumberRange.STATUS_LEFT_NONE
+        
+        if self.right.value is None:
+            return NumberRange.STATUS_RIGHT_NONE
+
+        if self.left.value > self.right.value:
+            return NumberRange.STATUS_INVALID_VALUE
+        
+        return NumberRange.STATUS_OK
+
+    def random_choice(self, is_float:bool=False):
+        '''
+            随机生成区间内的一个数字
+        '''
+        if not is_float:
+            return self.random_choice_int()
+        else:
+            return self.random_choice_float()
+
+    def random_choice_int(self):
+        assert self.valid
+        left = self.left.value if self.left.closed else self.left.value + 1
+        right = self.right.value if self.right.closed else self.right.value - 1
+        return random.randint(left, right)
+
+    def random_choice_float(self):
+        assert self.valid
+        return random.uniform(self.left.value, self.right.value)
+
+    @staticmethod
+    def from_string(string_value:str, is_float:bool=False):
+        pattern_number = r'-?\d+\.?\d*'
+        match = re.match(rf"([\(\[])\s*({pattern_number})?\s*,?\s*({pattern_number})?\s*([\)\]])", string_value)
+        if not match:
+            return None
+
+        left_close = match.groups()[0] == '[' # 左闭区间
+        right_close = match.groups()[3] == ']' # 右闭区间
+        num_min = match.groups()[1]
+        num_max = match.groups()[2]
+        caster = float if is_float else int
+        left = NumberRangeEnd(caster(num_min) if num_min else None, left_close, NumberRangeEnd.LEFT)
+        right = NumberRangeEnd(caster(num_max) if num_max else None, right_close, NumberRangeEnd.RIGHT)
+        return NumberRange(left, right)
