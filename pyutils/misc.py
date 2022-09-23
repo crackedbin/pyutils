@@ -7,13 +7,13 @@ import hashlib
 
 from typing import Union
 from pathlib import Path
-from collections import MutableMapping
+from collections.abc import MutableMapping
 
 from .exception import NoItem
 
 __all__ = [
     "safe_uuid", "percent", "ProbCalculator","md5_file", "md5_dir", 
-    "RandomDict", 'NumberRangeEnd', 'NumberRange'
+    "RandomDict", 'NumberRangeEnd', 'NumberRange', 'Singleton'
 ]
 
 def safe_uuid():
@@ -380,3 +380,10 @@ class NumberRange:
         left = NumberRangeEnd(caster(num_min) if num_min else None, left_close, NumberRangeEnd.LEFT)
         right = NumberRangeEnd(caster(num_max) if num_max else None, right_close, NumberRangeEnd.RIGHT)
         return NumberRange(left, right)
+
+class Singleton(type):
+    _instances = {}
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
