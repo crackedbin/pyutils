@@ -117,10 +117,11 @@ class LoggerChannel:
 class SimpleLogger(object):
     '''
         SimpleLogger推荐当作基类使用，也可以单独使用。
-        子类要使用该接口的功能,需要在`__init__`中调用`SimpleLogger.__init__(self, type(self).__name__)`。
+        子类要使用该接口的功能,需要在`__init__`中调用`SimpleLogger.__init__(self)`。
+        没有提供`logger_name`参数时会自动使用子类的类名作为`logger_name`。
         
         如果子类有多个实例同时运行且需要对这些实例进行区分,可以调用
-        `SimpleLogger.__init__(self, type(self).__name__, extend_name=<unique name>)`
+        `SimpleLogger.__init__(self, extend_name=<unique name>)`
     '''
 
     DEBUG       = LoggerLevel.DEBUG
@@ -144,9 +145,10 @@ class SimpleLogger(object):
     DEFAULT_CHANNEL_NAME = 'default'
 
     def __init__(
-        self, logger_name:str, extend_name:str='', enable_file:bool=False, 
+        self, logger_name:str='', extend_name:str='', enable_file:bool=False, 
         enable_stream:bool=True, log_dirname:str='', log_filename:str=''
     ):
+        logger_name = logger_name if logger_name else self.__class__.__name__
         self.__log_dirname:str    = log_dirname if log_dirname else logger_name
         self.__log_filename:str   = log_filename if log_filename else f"{logger_name}.log"
 
