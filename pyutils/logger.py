@@ -3,13 +3,11 @@ from __future__ import annotations
 
 import os
 import logging
-import importlib
 
 from logging import LogRecord, handlers
-from typing import Iterable
+from typing import Callable, Iterable, ByteString, Union
 
 from .file import mkdir
-from .misc import safe_uuid
 from .exception import LoggerException
 
 __all__ = [
@@ -23,6 +21,12 @@ class LoggerLevel:
     WARNING     = logging.WARNING
     ERROR       = logging.ERROR
     CRITICAL    = logging.CRITICAL
+
+    @staticmethod
+    def get_level(level:Union[str, int]):
+        if isinstance(level, str):
+            level = level.upper()
+        return logging.getLevelName(level)
 
 class BaseStreamFormatter(logging.Formatter):
     '''
@@ -43,15 +47,15 @@ class BaseStreamFormatter(logging.Formatter):
         super().__init__(fmt=fmt, datefmt=datefmt, style=style, validate=validate)
         constants = BaseStreamFormatter.COLOR_CONSTANTS
         self.FORMATS = {
-            SimpleLogger.DEBUG   : f"{constants['DEBUG']}{fmt}{constants['ENDC']}",
-            SimpleLogger.INFO    : f"{constants['INFO']}{fmt}{constants['ENDC']}",
-            SimpleLogger.WARNING : f"{constants['WARNING']}{fmt}{constants['ENDC']}",
-            SimpleLogger.ERROR   : f"{constants['ERROR']}{fmt}{constants['ENDC']}",
-            SimpleLogger.CRITICAL: f"{constants['CRITICAL']}{fmt}{constants['ENDC']}",
+            LoggerLevel.DEBUG   : f"{constants['DEBUG']}{fmt}{constants['ENDC']}",
+            LoggerLevel.INFO    : f"{constants['INFO']}{fmt}{constants['ENDC']}",
+            LoggerLevel.WARNING : f"{constants['WARNING']}{fmt}{constants['ENDC']}",
+            LoggerLevel.ERROR   : f"{constants['ERROR']}{fmt}{constants['ENDC']}",
+            LoggerLevel.CRITICAL: f"{constants['CRITICAL']}{fmt}{constants['ENDC']}",
         }
     
     def format(self, record:LogRecord) -> str:
-        formatter = logging.Formatter(self.FORMATS[record.levelno])
+        formatter = logging.Formatter(self.FORMATS.get(record.levelno, None))
         return formatter.format(record)
 
 class LoggerChannel:
@@ -63,6 +67,7 @@ class LoggerChannel:
         self.__logger = logger
         self.__name = channel_name
         self.__enable = True
+        self.__callbacks = {}
 
     @property
     def name(self):
@@ -77,6 +82,8 @@ class LoggerChannel:
     def log(self, msg, level=LoggerLevel.INFO):
         if not self.__enable: return
         self.__logger.log(level, msg)
+        if level not in self.__callbacks: return
+        self.__callbacks[level](msg)
 
     def debug(self, msg):
         self.log(msg, SimpleLogger.DEBUG)
@@ -112,7 +119,15 @@ class LoggerChannel:
     
     def critical_col(self, msgs:Iterable, width:int, spliter:str='|'):
         self.log_col(msgs, width, spliter, SimpleLogger.CRITICAL)
+    
+    def set_callback(self, level:Union[str, int], callback:Callable[[ByteString], None]):
+        if isinstance(level, str): level = LoggerLevel.get_level(level)
+        self.__callbacks[level] = callback
 
+    def clear_callback(self, level:Union[str, int]):
+        if isinstance(level, str): level = LoggerLevel.get_level(level)
+        if level not in self.__callbacks: return
+        self.__callbacks.pop(level)
 
 class SimpleLogger(object):
     '''
@@ -226,21 +241,34 @@ class SimpleLogger(object):
             self.__file_handler.setFormatter(logging.Formatter(
                 SimpleLogger.FILE_FORMAT
             ))
-            self.__file_handler.setLevel(logging.INFO)
+            self.__file_handler.setLevel(LoggerLevel.INFO)
             self.__logger.addHandler(self.__file_handler)
         elif self.__file_handler:
             self.__logger.removeHandler(self.__file_handler)
             self.__file_handler = None
     
-    def setLevel(self, level):
+    def setLevel(self, level:Union[str, int]):
+        '''
+            deprecated, please use `set_level` instead.
+        '''
+        self.set_level(level)
+    
+    def set_level(self, level:Union[str, int]):
+        if isinstance(level, str): level = LoggerLevel.get_level(level)
         self.__logger.setLevel(level)
         if self.__stream_handler:
             self.__stream_handler.setLevel(level)
         # 不在日志文件中记录调试信息
-        if self.__file_handler and level > logging.DEBUG:
+        if self.__file_handler and level > LoggerLevel.DEBUG:
             self.__file_handler.setLevel(level)
+    
+    def set_callback(self, level:Union[str, int], callback:Callable[[ByteString], None], channel:str=''):
+        self.channel(channel).set_callback(level, callback)
+    
+    def clear_callback(self, level:Union[str, int], channel:str=''):
+        self.channel(channel).clear_callback(level)
 
-    def log(self, msg, level=logging.INFO, channel_name:str=''):
+    def log(self, msg, level=LoggerLevel.INFO, channel_name:str=''):
         self.channel(channel_name).log(msg, level)
 
     def debug(self, msg, channel_name:str=''):
