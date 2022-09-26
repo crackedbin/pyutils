@@ -28,13 +28,11 @@ class LoggerLevel:
             level = level.upper()
         return logging.getLevelName(level)
 
-class BaseStreamFormatter(logging.Formatter):
-    '''
-        base stream formatter
-        
-        https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
-    '''
-    COLOR_CONSTANTS = {
+class SimpleStreamFormatter(logging.Formatter):
+
+    STREAM_FORMAT = r'[%(name)s]%(channel)s %(levelname)s: %(message)s'
+
+    COLOR = {
         'INFO'      : '\x1b[94m',
         'WARNING'   : '\x1b[93m',
         'ERROR'     : '\x1b[91m',
@@ -43,19 +41,33 @@ class BaseStreamFormatter(logging.Formatter):
         'ENDC'      : '\x1b[0m'
     }
 
-    def __init__(self, fmt=None, datefmt=None, style='%', validate=True) -> None:
-        super().__init__(fmt=fmt, datefmt=datefmt, style=style, validate=validate)
-        constants = BaseStreamFormatter.COLOR_CONSTANTS
-        self.FORMATS = {
-            LoggerLevel.DEBUG   : f"{constants['DEBUG']}{fmt}{constants['ENDC']}",
-            LoggerLevel.INFO    : f"{constants['INFO']}{fmt}{constants['ENDC']}",
-            LoggerLevel.WARNING : f"{constants['WARNING']}{fmt}{constants['ENDC']}",
-            LoggerLevel.ERROR   : f"{constants['ERROR']}{fmt}{constants['ENDC']}",
-            LoggerLevel.CRITICAL: f"{constants['CRITICAL']}{fmt}{constants['ENDC']}",
-        }
-    
-    def format(self, record:LogRecord) -> str:
-        formatter = logging.Formatter(self.FORMATS.get(record.levelno, None))
+    FORMATTERS = {
+        LoggerLevel.DEBUG   : logging.Formatter(
+            f"{COLOR['DEBUG']}{STREAM_FORMAT}{COLOR['ENDC']}"),
+        LoggerLevel.INFO    : logging.Formatter(
+            f"{COLOR['INFO']}{STREAM_FORMAT}{COLOR['ENDC']}"),
+        LoggerLevel.WARNING : logging.Formatter(
+            f"{COLOR['WARNING']}{STREAM_FORMAT}{COLOR['ENDC']}"),
+        LoggerLevel.ERROR   : logging.Formatter(
+            f"{COLOR['ERROR']}{STREAM_FORMAT}{COLOR['ENDC']}"),
+        LoggerLevel.CRITICAL: logging.Formatter(
+            f"{COLOR['CRITICAL']}{STREAM_FORMAT}{COLOR['ENDC']}"),
+        'default': logging.Formatter(STREAM_FORMAT)
+    }
+
+    def format(self, record:LogRecord) -> str:  
+        if record.levelno in SimpleStreamFormatter.FORMATTERS:
+            formatter = SimpleStreamFormatter.FORMATTERS[record.levelno]
+        else:
+            formatter = SimpleStreamFormatter.FORMATTERS['default']
+        
+        if hasattr(record, 'channel'):
+            channel = getattr(record, 'channel')
+            if channel == 'default':
+                setattr(record, 'channel', '')
+            else:
+                setattr(record, 'channel', f"({channel})")
+
         return formatter.format(record)
 
 class LoggerChannel:
@@ -81,7 +93,7 @@ class LoggerChannel:
 
     def log(self, msg, level=LoggerLevel.INFO):
         if not self.__enable: return
-        self.__logger.log(level, msg)
+        self.__logger.log(level, msg, extra={'channel': self.__name})
         if level not in self.__callbacks: return
         self.__callbacks[level](msg)
 
@@ -214,9 +226,7 @@ class SimpleLogger(object):
     def enable_stream(self, enable=True):
         if enable:
             self.__stream_handler = logging.StreamHandler()
-            self.__stream_handler.setFormatter(BaseStreamFormatter(
-                SimpleLogger.STREAM_FORMAT
-            ))
+            self.__stream_handler.setFormatter(SimpleStreamFormatter())
             self.__logger.addHandler(self.__stream_handler)
         elif self.__stream_handler:
             self.__logger.removeHandler(self.__stream_handler)
