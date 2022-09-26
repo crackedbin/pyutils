@@ -66,14 +66,14 @@ def mkdir(path, parent=True):
         os.mkdir(path)
 
 def find_files(
-    __dir: str, prefix: str = "", postfix: str = "", filter_func: Callable = None
+    __dir: str, prefix: str = "", suffix: str = "", filter_func: Callable = None
 ) -> list[str]:
     """功能简单的文件查找方法
 
-    :param `__dir`        : 目录路径
-    :param `prefix`       : 文件名前缀
-    :param `postfix`      : 文件名后缀
-    :param `filter_func`  : 过滤函数, 原型: `(dirpath:str, filename:str) -> bool`
+    :param `__dir`       : 目录路径
+    :param `prefix`      : 文件名前缀
+    :param `suffix`      : 文件名后缀
+    :param `filter_func` : 过滤函数, 原型: `(dirpath:str, filename:str) -> bool`
 
     :return: 返回文件路径列表, 如果找不到某些文件可能是缺少目录权限.
     """
@@ -82,7 +82,7 @@ def find_files(
         for file in files:
             if prefix and not file.startswith(prefix):
                 continue
-            if postfix and not file.endswith(postfix):
+            if suffix and not file.endswith(suffix):
                 continue
             if filter_func and not filter_func(dirpath, file):
                 continue
@@ -91,4 +91,4 @@ def find_files(
 
 def find_all_files_by_suffix(target_dir: str, suffix: str):
     '''deprecated, use `find_files` insted'''
-    return find_files(target_dir, postfix=suffix)
+    return find_files(target_dir, suffix=suffix)
