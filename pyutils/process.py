@@ -4,7 +4,7 @@ import subprocess
 import multiprocessing
 
 from queue import Empty
-from typing import Callable
+from typing import Callable, Union
 from threading import Thread
 
 __all__ = [
@@ -77,9 +77,12 @@ class EventTarget:
     def stop_event_loop(self):
         self.__event_loop_running = False
     
-    def dispatch_event(self, event:Event):
-        self.__event_queue.put(event)
-    
+    def dispatch_event(self, event:Union[Event, str], **event_args):
+        if isinstance(event, Event):
+            self.__event_queue.put(event)
+        elif isinstance(event, str):
+            self.__event_queue.put(Event(event, **event_args))
+
     def add_event_handler(self, event_name:str, handler:Callable):
         with self.__handler_lock:
             self.__event_handlers[event_name] = handler
