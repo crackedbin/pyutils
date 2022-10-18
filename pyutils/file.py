@@ -3,8 +3,6 @@ import shutil
 
 from typing import Callable
 
-from .exception import FileException
-
 __all__ = [
     "read_file",
     "write_file",
@@ -17,45 +15,34 @@ __all__ = [
 ]
 
 
-def _open(file, mode):
-    if not "b" in mode:
-        encoding = "utf-8"
-    else:
-        encoding = None
+def _open(filepath:os.PathLike, mode:str, encoding:str='utf-8'):
+    return open(filepath, mode, encoding=encoding)
 
-    return open(file, mode, encoding=encoding)
-
-
-def read_file(filepath, mode="r", lines: bool = False):
-    with _open(filepath, mode) as fd:
+def read_file(filepath:os.PathLike, mode:str="r", lines: bool = False, encoding='utf-8'):
+    with _open(filepath, mode, encoding=encoding) as fd:
         if not lines:
             content = fd.read()
         else:
             content = fd.readlines()
     return content
 
-
-def write_file(filepath, content, mode="w", lines: bool = False):
+def write_file(filepath:os.PathLike, content, mode="w", lines: bool = False):
     with _open(filepath, mode) as f:
         if not lines:
             f.write(content)
         else:
             f.writelines(content)
 
-
 def delete_dir(dirpath):
     shutil.rmtree(dirpath, ignore_errors=True)
-
 
 def delete_file(filepath):
     if not os.path.exists(filepath):
         return
     os.remove(filepath)
 
-
 def mvdir(src, dst):
     shutil.move(src, dst)
-
 
 def mkdir(path, parent=True):
     if os.path.exists(path):
