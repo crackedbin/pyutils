@@ -33,18 +33,18 @@ def write_file(filepath:os.PathLike, content, mode="w", lines: bool = False):
         else:
             f.writelines(content)
 
-def delete_dir(dirpath):
+def delete_dir(dirpath:os.PathLike):
     shutil.rmtree(dirpath, ignore_errors=True)
 
-def delete_file(filepath):
+def delete_file(filepath:os.PathLike):
     if not os.path.exists(filepath):
         return
     os.remove(filepath)
 
-def mvdir(src, dst):
+def mvdir(src:os.PathLike, dst:os.PathLike):
     shutil.move(src, dst)
 
-def mkdir(path, parent=True):
+def mkdir(path:os.PathLike, parent:bool=True):
     if os.path.exists(path):
         return
     if parent:
