@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import uuid
 import random
@@ -32,14 +33,10 @@ class ProbCalculator:
         用于根据给定的概率来随机选择item.
 
         例:
-            calc = ProbCalculator()
-
-            calc.add(50, func1)
-
-            calc.add(30, func2)
-
-            calc.add(20, func3)
-
+            calc = ProbCalculator()\n
+            calc.add(50, func1)\n
+            calc.add(30, func2)\n
+            calc.add(20, func3)\n
             func = calc.get()
         
         func的概率分布:
@@ -100,17 +97,20 @@ class ProbCalculator:
     def empty(self):
         return not bool(self.__items)
 
-def md5_update_from_file(filename: Union[str, Path], hash:hashlib._Hash) -> hashlib._Hash:
+def md5_update_from_file(filename:os.PathLike, hash:hashlib._Hash) -> hashlib._Hash:
     assert Path(filename).is_file()
     with open(str(filename), "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             hash.update(chunk)
     return hash
 
-def md5_file(filename: Union[str, Path]) -> str:
+def md5_file(filename:os.PathLike) -> str:
+    '''
+        计算一个文件的md5
+    '''
     return str(md5_update_from_file(filename, hashlib.md5()).hexdigest())
 
-def md5_update_from_dir(directory: Union[str, Path], hash: hashlib._Hash) -> hashlib._Hash:
+def md5_update_from_dir(directory:os.PathLike, hash: hashlib._Hash) -> hashlib._Hash:
     assert Path(directory).is_dir()
     for path in sorted(Path(directory).iterdir(), key=lambda p: str(p).lower()):
         hash.update(path.name.encode())
@@ -120,10 +120,19 @@ def md5_update_from_dir(directory: Union[str, Path], hash: hashlib._Hash) -> has
             hash = md5_update_from_dir(path, hash)
     return hash
 
-def md5_dir(directory: Union[str, Path]) -> str:
+def md5_dir(directory:os.PathLike) -> str:
+    '''
+        计算一个目录的md5
+    '''
     return str(md5_update_from_dir(directory, hashlib.md5()).hexdigest())
 
 class RandomDict(MutableMapping):
+    '''
+        对比普通的dict对象, 增加了以下方法:
+            random_key: 随机返回一个key
+            random_value: 随机返回一个value
+            random_item: 随机返回一个item
+    '''
     def __init__(self, *args, **kwargs):
         """ Create RandomDict object with contents specified by arguments.
         Any argument
@@ -291,6 +300,12 @@ class NumberRangeEnd:
         return NumberRangeEnd(value, closed, NumberRangeEnd.RIGHT)
 
 class NumberRange:
+    '''
+        类似range对象, 增加以下功能:
+            * 支持从字符串构建
+            * 支持开闭区间
+            * 支持随机从区间取值: random_choice
+    '''
 
     STATUS_OK               = 1
     STATUS_LEFT_NONE        = 2
@@ -367,6 +382,12 @@ class NumberRange:
 
     @staticmethod
     def from_string(string_value:str, is_float:bool=False):
+        '''
+            string中的数字只支持十进制
+
+            string_value示例:
+                [0, 10], [0, 10.5), (0.5, 10), (0, 10]
+        '''
         pattern_number = r'-?\d+\.?\d*'
         match = re.match(rf"([\(\[])\s*({pattern_number})?\s*,?\s*({pattern_number})?\s*([\)\]])", string_value)
         if not match:
@@ -382,6 +403,9 @@ class NumberRange:
         return NumberRange(left, right)
 
 class Singleton(type):
+    '''
+        实现单例模式的基类, 如果有实现单例模式的需求, 直接继承该类即可.
+    '''
     _instances = {}
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
