@@ -346,24 +346,24 @@ class NumberRange:
         
         return NumberRange.STATUS_OK
 
-    def random_choice(self, is_float:bool=False):
+    def random_choice(self, is_float:bool=False, step:int=1, mode:float=None):
         '''
             随机生成区间内的一个数字
         '''
         if not is_float:
-            return self.random_choice_int()
+            return self.random_choice_int(step=step)
         else:
-            return self.random_choice_float()
+            return self.random_choice_float(mode=mode)
 
-    def random_choice_int(self):
+    def random_choice_int(self, step:int=1):
         assert self.valid
-        left = self.left.value if self.left.closed else self.left.value + 1
-        right = self.right.value if self.right.closed else self.right.value - 1
-        return random.randint(left, right)
+        start = self.left.value if self.left.closed else self.left.value + 1
+        end = self.right.value + 1 if self.right.closed else self.right.value
+        return random.randrange(start, end, step)
 
-    def random_choice_float(self):
+    def random_choice_float(self, mode:float=None):
         assert self.valid
-        return random.uniform(self.left.value, self.right.value)
+        return random.triangular(self.left.value, self.right.value, mode)
 
     @staticmethod
     def from_string(string_value:str, is_float:bool=False):
