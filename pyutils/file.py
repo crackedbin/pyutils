@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import shutil
 
 from typing import Callable
@@ -53,19 +54,20 @@ def mkdir(path:os.PathLike, parent:bool=True):
         os.mkdir(path)
 
 def find_files(
-    __dir: str, prefix: str = "", suffix: str = "", filter_func: Callable = None
-) -> list[str]:
+    _dir: os.PathLike, prefix: str = "", suffix: str = "", 
+    filter_func: Callable[[os.PathLike, str], bool] = None
+) -> list[Path]:
     """功能简单的文件查找方法
 
     :param `__dir`       : 目录路径
     :param `prefix`      : 文件名前缀
     :param `suffix`      : 文件名后缀
-    :param `filter_func` : 过滤函数, 原型: `(dirpath:str, filename:str) -> bool`
+    :param `filter_func` : 过滤函数, 原型: `(dirpath:os.PathLike, filename:str) -> bool`
 
     :return: 返回文件路径列表, 如果找不到某些文件可能是缺少目录权限.
     """
     result = []
-    for dirpath, _, files in os.walk(__dir):
+    for dirpath, _, files in os.walk(_dir):
         for file in files:
             if prefix and not file.startswith(prefix):
                 continue
@@ -73,9 +75,9 @@ def find_files(
                 continue
             if filter_func and not filter_func(dirpath, file):
                 continue
-            result.append(os.path.join(dirpath, file))
+            result.append(Path(os.path.join(dirpath, file)))
     return result
 
-def find_all_files_by_suffix(target_dir: str, suffix: str):
+def find_all_files_by_suffix(target_dir: os.PathLike, suffix: str):
     '''deprecated, use `find_files` insted'''
     return find_files(target_dir, suffix=suffix)
