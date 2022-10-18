@@ -66,7 +66,7 @@ class SimpleStreamFormatter(logging.Formatter):
             if channel == 'default':
                 setattr(record, 'channel', '')
             else:
-                setattr(record, 'channel', f"({channel})")
+                setattr(record, 'channel', f"{channel}")
 
         return formatter.format(record)
 
@@ -75,11 +75,18 @@ class LoggerChannel:
         一个LoggerBase及其子类可以拥有多个LoggerChannel
     '''
 
-    def __init__(self, channel_name:str, logger:logging.Logger):
-        self.__logger = logger
+    def __init__(self, host:SimpleLogger, channel_name:str):
+        self.__host = host
         self.__name = channel_name
         self.__enable = True
         self.__callbacks = {}
+        if isinstance(self.__host.channel_name_length, int):
+            if len(self.__name) > self.__host.channel_name_length:
+                self.__name_to_show = f"({self.__name[:10]})"
+            else:
+                self.__name_to_show = f"({self.__name})".ljust(self.__host.channel_name_length + 2, ' ')
+        else:
+            self.__name_to_show = f"({self.__name})"
 
     @property
     def name(self):
@@ -91,11 +98,14 @@ class LoggerChannel:
     def disable(self):
         self.__enable = False
 
-    def log(self, msg, level=LoggerLevel.INFO):
+    def __do_log(self, msg, level):
         if not self.__enable: return
-        self.__logger.log(level, msg, extra={'channel': self.__name})
+        self.__host.logger.log(level, msg, extra={'channel': self.__name_to_show})
         if level not in self.__callbacks: return
         self.__callbacks[level](msg)
+
+    def log(self, msg, level=LoggerLevel.INFO):
+        self.__do_log(msg, level)
 
     def debug(self, msg):
         self.log(msg, SimpleLogger.DEBUG)
@@ -173,7 +183,8 @@ class SimpleLogger(object):
 
     def __init__(
         self, logger_name:str='', extend_name:str='', enable_file:bool=False, 
-        enable_stream:bool=True, log_dirname:str='', log_filename:str=''
+        enable_stream:bool=True, log_dirname:str='', log_filename:str='',
+        channel_name_length:int=None
     ):
         logger_name = logger_name if logger_name else self.__class__.__name__
         self.__log_dirname:str    = log_dirname if log_dirname else logger_name
@@ -193,6 +204,7 @@ class SimpleLogger(object):
         self.__stream_handler = None
         
         self.__channels:dict[str, LoggerChannel] = {}
+        self.__channel_name_length:Union[int, None] = channel_name_length
 
         self.__logger.handlers.clear()
         self.__logger.propagate = False # 如果该属性为True,日志消息会传递到更高级的记录器中(比如根记录器)导致日志被多次打印输出。
@@ -200,10 +212,18 @@ class SimpleLogger(object):
         self.enable_file(enable_file)
         self.set_level(SimpleLogger.DEFAULT_LOGGING_LEVEL)
 
+    @property
+    def channel_name_length(self):
+        return self.__channel_name_length
+
+    @property
+    def logger(self):
+        return self.__logger
+
     def __create_channel(self, name:str):
         if name in self.__channels:
             raise LoggerException(f"duplicate logger channel name: {name}")
-        self.__channels[name] = LoggerChannel(name, self.__logger)
+        self.__channels[name] = LoggerChannel(self, name)
 
     def channel(self, name:str=''):
         name = name if name else SimpleLogger.DEFAULT_CHANNEL_NAME
