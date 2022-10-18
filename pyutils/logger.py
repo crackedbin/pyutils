@@ -239,9 +239,6 @@ class SimpleLogger(object):
     
     def set_log_dir(self, log_dir:os.PathLike):
         self.__log_dir = log_dir
-        if self.__file_handler is None: return
-        self.enable_file(False)
-        self.enable_file(True)
 
     def enable_stream(self, enable=True):
         if enable:
