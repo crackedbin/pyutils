@@ -198,7 +198,7 @@ class SimpleLogger(object):
         self.__logger.propagate = False # 如果该属性为True,日志消息会传递到更高级的记录器中(比如根记录器)导致日志被多次打印输出。
         self.enable_stream(enable_stream)
         self.enable_file(enable_file)
-        self.setLevel(SimpleLogger.DEFAULT_LOGGING_LEVEL)
+        self.set_level(SimpleLogger.DEFAULT_LOGGING_LEVEL)
 
     def __create_channel(self, name:str):
         if name in self.__channels:
