@@ -4,11 +4,11 @@ from __future__ import annotations
 import os
 import logging
 
+import pyutils
+
 from logging import LogRecord, handlers
 from typing import Callable, Iterable, ByteString, Union
-
-from .file import mkdir
-from .exception import LoggerException
+from pathlib import Path
 
 __all__ = [
     'SimpleLogger'
@@ -177,7 +177,7 @@ class SimpleLogger(object):
     DEFAULT_LOGGING_LEVEL = INFO
 
     # 日志存放目录
-    __log_dir = None
+    __log_root_dir = None
 
     DEFAULT_CHANNEL_NAME = 'default'
 
@@ -222,7 +222,7 @@ class SimpleLogger(object):
 
     def __create_channel(self, name:str):
         if name in self.__channels:
-            raise LoggerException(f"duplicate logger channel name: {name}")
+            raise pyutils.LoggerException(f"duplicate logger channel name: {name}")
         self.__channels[name] = LoggerChannel(self, name)
 
     def channel(self, name:str=''):
@@ -235,10 +235,10 @@ class SimpleLogger(object):
 
     @classmethod
     def set_default_log_dir(cls, dirpath:os.PathLike):
-        cls.__log_dir = dirpath
+        cls.__log_root_dir = Path(dirpath)
     
     def set_log_dir(self, log_dir:os.PathLike):
-        self.__log_dir = log_dir
+        self.__log_root_dir = Path(log_dir)
 
     def enable_stream(self, enable=True):
         if enable:
@@ -250,14 +250,14 @@ class SimpleLogger(object):
             self.__stream_handler = None
 
     def enable_file(self, enable=True):
-        if enable and (not self.__log_dir or not os.path.exists(self.__log_dir)):
+        if enable and (not self.__log_root_dir or not os.path.exists(self.__log_root_dir)):
             self.warning("Not set log_dir or it not exist, can not enable file logging.")
             return
         
         if enable:
-            file_log_dir = os.path.join(self.__log_dir, self.__log_dirname)
-            file_log_path = os.path.join(file_log_dir, self.__log_filename)
-            mkdir(file_log_dir)
+            file_log_dir = self.__log_root_dir.joinpath(self.__log_dirname)
+            file_log_path = file_log_dir.joinpath(self.__log_filename)
+            file_log_dir.mkdir(parents=True, exist_ok=True)
             self.__file_handler = handlers.TimedRotatingFileHandler(
                 filename    = file_log_path, 
                 when        = SimpleLogger.FILE_ROATING_WHEN, 
