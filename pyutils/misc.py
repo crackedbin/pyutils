@@ -288,21 +288,26 @@ class NumberRange:
     STATUS_BOTH_NONE        = 4
     STATUS_INVALID_VALUE    = 5
     
-    def __init__(self, left:NumberRangeEnd, right:NumberRangeEnd):
+    def __init__(self, left:NumberRangeEnd, right:NumberRangeEnd, base:int=None):
         self.__left = left
         self.__right = right
+        self.__base = base
+        assert isinstance(self.__base, int) or base is None
         assert self.status != NumberRange.STATUS_INVALID_VALUE
-    
+
     def __repr__(self) -> str:
         pre = '[' if self.left.closed else '('
         suf = ']' if self.right.closed else ')'
-        return f"{pre}{self.left.value}, {self.right.value}{suf}"
+        if self.__base is None:
+            return f"{pre}{self.left.value}, {self.right.value}{suf}"
+        else:
+            return f"{pre}{self.left.value}, {self.right.value}{suf}{{{self.__base}}}"
 
     __str__ : __repr__
 
     def __contains__(self, item:Union[NumberRange, int]):
         assert self.valid
-        if type(item) is int:
+        if isinstance(item, int):
             left = NumberRangeEnd(item, True, NumberRangeEnd.LEFT)
             right = NumberRangeEnd(item, True, NumberRangeEnd.RIGHT)
             return NumberRange(left, right) in self
@@ -336,12 +341,19 @@ class NumberRange:
         
         return NumberRange.STATUS_OK
 
+    @property
+    def base(self):
+        return self.__base
+
     def random_choice(self, is_float:bool=False, step:int=1, mode:float=None):
         '''
             随机生成区间内的一个数字
         '''
         if not is_float:
-            return self.random_choice_int(step=step)
+            if self.__base is None:
+                return self.random_choice_int(step=step)
+            else:
+                return self.random_choice_int_with_base()
         else:
             return self.random_choice_float(mode=mode)
 
@@ -351,12 +363,24 @@ class NumberRange:
         end = self.right.value + 1 if self.right.closed else self.right.value
         return random.randrange(start, end, step)
 
+    def random_choice_int_with_base(self):
+        assert self.valid
+        assert isinstance(self.__base, int)
+        assert self.__base != 0
+        left_value = self.left.value if self.left.closed else self.left.value + 1
+        right_value = self.right.value if self.right.closed else self.right.value - 1
+        assert right_value - left_value >= self.__base
+        m = left_value % self.__base
+        start = left_value if m == 0 else left_value + abs(self.__base - m)
+        end = right_value + 1
+        return random.randrange(start, end, abs(self.__base))
+
     def random_choice_float(self, mode:float=None):
         assert self.valid
         return random.triangular(self.left.value, self.right.value, mode)
 
     @staticmethod
-    def from_string(string_value:str, is_float:bool=False):
+    def from_string(string_value:str, is_float:bool=False, base:int=None):
         '''
             string中的数字只支持十进制
 
@@ -375,7 +399,7 @@ class NumberRange:
         caster = float if is_float else int
         left = NumberRangeEnd(caster(num_min) if num_min else None, left_close, NumberRangeEnd.LEFT)
         right = NumberRangeEnd(caster(num_max) if num_max else None, right_close, NumberRangeEnd.RIGHT)
-        return NumberRange(left, right)
+        return NumberRange(left, right, base=base)
 
 class Singleton(type):
     '''
