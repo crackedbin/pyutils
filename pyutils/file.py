@@ -17,7 +17,10 @@ __all__ = [
 
 
 def _open(filepath:os.PathLike, mode:str, encoding:str='utf-8'):
-    return open(filepath, mode, encoding=encoding)
+    if 'b' in mode:
+        return open(filepath, mode)
+    else:
+        return open(filepath, mode, encoding=encoding)
 
 def read_file(filepath:os.PathLike, mode:str="r", lines: bool = False, encoding='utf-8'):
     with _open(filepath, mode, encoding=encoding) as fd:
