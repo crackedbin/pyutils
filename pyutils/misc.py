@@ -5,16 +5,20 @@ import re
 import uuid
 import random
 import hashlib
+import importlib
+import importlib.util
 
+import pyutils
+
+from types import ModuleType
 from typing import Union
 from pathlib import Path
 from collections.abc import MutableMapping
 
-from .exception import NoItem
-
 __all__ = [
     "safe_uuid", "percent", "ProbCalculator","md5_file", "md5_dir", 
-    "RandomDict", 'NumberRangeEnd', 'NumberRange', 'Singleton'
+    "RandomDict", 'NumberRangeEnd', 'NumberRange', 'Singleton',
+    'import_from'
 ]
 
 def safe_uuid():
@@ -79,7 +83,7 @@ class ProbCalculator:
         
     def get(self):
         if not self.__items:
-            raise NoItem("no item in ProbCalculator")
+            raise pyutils.NoItem("no item in ProbCalculator")
         self.__do_calculate()
         random_num = random.randrange(0, self.__precision)
         item = None
@@ -96,35 +100,6 @@ class ProbCalculator:
     
     def empty(self):
         return not bool(self.__items)
-
-def md5_update_from_file(filename:os.PathLike, hash:hashlib._Hash) -> hashlib._Hash:
-    assert Path(filename).is_file()
-    with open(str(filename), "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash.update(chunk)
-    return hash
-
-def md5_file(filename:os.PathLike) -> str:
-    '''
-        计算一个文件的md5
-    '''
-    return str(md5_update_from_file(filename, hashlib.md5()).hexdigest())
-
-def md5_update_from_dir(directory:os.PathLike, hash: hashlib._Hash) -> hashlib._Hash:
-    assert Path(directory).is_dir()
-    for path in sorted(Path(directory).iterdir(), key=lambda p: str(p).lower()):
-        hash.update(path.name.encode())
-        if path.is_file():
-            hash = md5_update_from_file(path, hash)
-        elif path.is_dir():
-            hash = md5_update_from_dir(path, hash)
-    return hash
-
-def md5_dir(directory:os.PathLike) -> str:
-    '''
-        计算一个目录的md5
-    '''
-    return str(md5_update_from_dir(directory, hashlib.md5()).hexdigest())
 
 class RandomDict(MutableMapping):
     '''
@@ -411,3 +386,51 @@ class Singleton(type):
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
+
+def md5_update_from_file(filename:os.PathLike, hash:hashlib._Hash) -> hashlib._Hash:
+    assert Path(filename).is_file()
+    with open(str(filename), "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash.update(chunk)
+    return hash
+
+def md5_file(filename:os.PathLike) -> str:
+    '''
+        计算一个文件的md5
+    '''
+    return str(md5_update_from_file(filename, hashlib.md5()).hexdigest())
+
+def md5_update_from_dir(directory:os.PathLike, hash: hashlib._Hash) -> hashlib._Hash:
+    assert Path(directory).is_dir()
+    for path in sorted(Path(directory).iterdir(), key=lambda p: str(p).lower()):
+        hash.update(path.name.encode())
+        if path.is_file():
+            hash = md5_update_from_file(path, hash)
+        elif path.is_dir():
+            hash = md5_update_from_dir(path, hash)
+    return hash
+
+def md5_dir(directory:os.PathLike) -> str:
+    '''
+        计算一个目录的md5
+    '''
+    return str(md5_update_from_dir(directory, hashlib.md5()).hexdigest())
+
+def import_from(module_dir:os.PathLike) -> dict[str, object]:
+    '''
+        从指定目录导入所有.py文件`__all__`列表中指定的对象, 以字典形式返回, 
+        如果出现相同的导出符号会抛出异常.
+    '''
+    py_files = pyutils.find_files(
+        module_dir, suffix='.py', filter_func=lambda _, f: f != '__init__.py')
+    _all = {}
+    for file in py_files:
+        module_name = file.parts[-1].split('.')[0]
+        module_spec = importlib.util.spec_from_file_location(module_name, file)
+        module = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(module)
+        for k in module.__all__:
+            if k in _all:
+                raise ImportError(f"Conflict name {k}")
+            _all[k] = module.__dict__[k]
+    return _all
