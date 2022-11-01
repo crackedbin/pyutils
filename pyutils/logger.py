@@ -9,7 +9,7 @@ import logging
 import pyutils
 
 from logging import LogRecord, handlers
-from typing import Callable, Iterable, ByteString, Union
+from typing import Callable, Iterable, ByteString, TextIO, Union
 from pathlib import Path
 
 __all__ = [
@@ -251,6 +251,14 @@ class SimpleLogger(object):
             self.__logger.removeHandler(self.__stream_handler)
             self.__stream_handler = None
 
+    def enable_merger(self):
+        if not self.__stream_handler: return
+        self.__stream_handler.setStream(LogMerger())
+
+    def disable_merger(self):
+        if not self.__stream_handler: return
+        self.__stream_handler.setStream(sys.stdout)
+
     def enable_file(self, enable=True):
         if enable and (not self.__log_root_dir or not os.path.exists(self.__log_root_dir)):
             self.warning("Not set log_dir or it not exist, can not enable file logging.")
@@ -339,69 +347,30 @@ class SimpleLogger(object):
     def for_current_file():
         return SimpleLogger(os.path.basename(__file__))
 
-class MergeableLogger():
+class LogMerger(TextIO):
 
     def __init__(self):
         self.__cached_line = None
         self.__cache_hits = 0
 
-    def log(self, msg:Union[bytes, str]):
+    def write(self, msg:Union[bytes, str]):
+        if msg.endswith('\n'): msg = msg[:-1]
         if msg == self.__cached_line:
             self.__cache_hits += 1
             if isinstance(msg, str):
                 line_breaks = len(list(re.finditer(r'(\r\n|\r|\n)', msg)))
-                sys.stdout.write('\033[{}F'.format(line_breaks+1))
-            else:
-                sys.stdout.write('\033[F')
-            print(f"{msg}(repeat: {self.__cache_hits+1})")
+                Cursor.up(line_breaks)
+            Cursor.up()
+            sys.stdout.write(f"{msg}(repeat: {self.__cache_hits+1})")
         else:
             self.__cache_hits = 0
-            print(msg)
+            sys.stdout.write(msg)
+        sys.stdout.write('\n')
         self.__cached_line = msg
 
-class MergeableLogger2:
+class Cursor:
 
-    def __init__(self):
-        self.__cache_oneline_hits = 0
-        self.__cache_group_hits = 0
-        self.__cache_idx = 0
-        self.__cache_max = 3
-        self.__cached_lines = [ None for _ in range(self.__cache_max)]
-        self.__previous_line = None
-        self.__merge_mode = "strict" # or realxed
-
-    @property
-    def __current_idx(self):
-        return self.__cache_idx%self.__cache_max
-
-    @property
-    def __group_matched(self):
-        return self.__cache_group_hits and self.__cache_group_hits % self.__cache_max == 0
-
-    def log(self, msg:Union[bytes, str]):
-        if msg == self.__previous_line:
-            self.__cache_group_hits = 0
-            self.__cache_oneline_hits += 1
-            if isinstance(msg, str):
-                line_breaks = len(list(re.finditer(r'(\r\n|\r|\n)', msg)))
-                sys.stdout.write('\033[{}F'.format(line_breaks+1))
-            else:
-                sys.stdout.write('\033[F')
-            print(f"{msg}(repeat: {self.__cache_oneline_hits+1})")
-        elif msg == self.__cached_lines[self.__current_idx] and self.__group_matched:
-            self.__cache_oneline_hits = 0
-            self.__cache_group_hits += 1
-            if isinstance(msg, str):
-                line_breaks = len(list(re.finditer(r'(\r\n|\r|\n)', msg)))
-                sys.stdout.write('\033[{}F'.format(line_breaks+1))
-            else:
-                sys.stdout.write('\033[F')
-            print(f"{msg}(repeat: {self.__cache_group_hits+1})")
-        else:
-            self.__cache_oneline_hits = 0
-            self.__cache_group_hits = 0
-            print(msg)
-
-        self.__previous_line = msg
-        self.__cached_lines[self.__current_idx] = msg
-        self.__cache_idx += 1
+    @staticmethod
+    def up(row=1):
+        if row < 1: return
+        sys.stdout.write('\033[{}F'.format(row))
