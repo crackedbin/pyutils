@@ -7,4 +7,4 @@ from .logger import *
 from .misc import *
 from .process import *
 
-version = "1.5.3"
+version = "1.5.4"
