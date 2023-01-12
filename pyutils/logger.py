@@ -6,11 +6,12 @@ import re
 import sys
 import logging
 
-import pyutils
-
 from logging import LogRecord, handlers
 from typing import Callable, Iterable, ByteString, TextIO, Union
 from pathlib import Path
+
+from pyutils.misc import TerminalCursor
+from pyutils.exception import LoggerException
 
 __all__ = [
     'SimpleLogger'
@@ -90,7 +91,7 @@ class LoggerChannel:
             if len(self.__name) > _length:
                 self.__name_to_show = f"({self.__name[:_length]})"
             else:
-                self.__name_to_show = f"({self.__name.rjust(_length + 2, self.DEFAULT_NAME_PADDING)})"
+                self.__name_to_show = f"({self.__name.rjust(_length, self.DEFAULT_NAME_PADDING)})"
         else:
             self.__name_to_show = f"({self.__name})"
 
@@ -132,7 +133,8 @@ class LoggerChannel:
 
     def log_col(self, msgs:Iterable, width:int, spliter:str='|', level=LoggerLevel.INFO):
         msgs = [ f"{str(m).ljust(width)}" for m in msgs]
-        msg = f"{spliter} ".join(msgs)
+        spliter = f"{spliter} "
+        msg = f"{spliter}{spliter.join(msgs)}"
         self.log(msg, level)
 
     def debug_col(self, msgs:Iterable, width:int, spliter:str='|'):
@@ -233,7 +235,7 @@ class SimpleLogger(object):
 
     def __create_channel(self, name:str):
         if name in self.__channels:
-            raise pyutils.LoggerException(f"duplicate logger channel name: {name}")
+            raise LoggerException(f"duplicate logger channel name: {name}")
         self.__channels[name] = LoggerChannel(self, name)
 
     def channel(self, name:str=''):
@@ -363,8 +365,8 @@ class LogMerger(TextIO):
             self.__cache_hits += 1
             if isinstance(msg, str):
                 line_breaks = len(list(re.finditer(r'(\r\n|\r|\n)', msg)))
-                Cursor.up(line_breaks)
-            Cursor.up()
+                TerminalCursor.up(line_breaks)
+            TerminalCursor.up()
             sys.stdout.write(f"{msg}(~{self.__cache_hits+1})")
         else:
             self.__cache_hits = 0
@@ -372,9 +374,3 @@ class LogMerger(TextIO):
         sys.stdout.write('\n')
         self.__cached_line = msg
 
-class Cursor:
-
-    @staticmethod
-    def up(row=1):
-        if row < 1: return
-        sys.stdout.write('\033[{}F'.format(row))

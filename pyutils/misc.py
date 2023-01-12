@@ -2,23 +2,21 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import uuid
 import random
 import hashlib
-import importlib
-import importlib.util
 
-import pyutils
-
-from types import ModuleType
 from typing import Union
 from pathlib import Path
 from collections.abc import MutableMapping
 
+from pyutils.exception import NoItem
+
 __all__ = [
     "safe_uuid", "percent", "ProbCalculator","md5_file", "md5_dir", 
     "RandomDict", 'NumberRangeEnd', 'NumberRange', 'Singleton',
-    'import_from'
+    'TerminalCursor'
 ]
 
 def safe_uuid():
@@ -83,7 +81,7 @@ class ProbCalculator:
         
     def get(self):
         if not self.__items:
-            raise pyutils.NoItem("no item in ProbCalculator")
+            raise NoItem("no item in ProbCalculator")
         self.__do_calculate()
         random_num = random.randrange(0, self.__precision)
         item = None
@@ -440,21 +438,29 @@ def md5_dir(directory:os.PathLike) -> str:
     '''
     return str(md5_update_from_dir(directory, hashlib.md5()).hexdigest())
 
-def import_from(module_dir:os.PathLike) -> dict[str, object]:
-    '''
-        从指定目录导入所有.py文件`__all__`列表中指定的对象, 以字典形式返回, 
-        如果出现相同的导出符号会抛出异常.
-    '''
-    py_files = pyutils.find_files(
-        module_dir, suffix='.py', filter_func=lambda _, f: f != '__init__.py')
-    _all = {}
-    for file in py_files:
-        module_name = file.parts[-1].split('.')[0]
-        module_spec = importlib.util.spec_from_file_location(module_name, file)
-        module = importlib.util.module_from_spec(module_spec)
-        module_spec.loader.exec_module(module)
-        for k in module.__all__:
-            if k in _all:
-                raise ImportError(f"Conflict name {k}")
-            _all[k] = module.__dict__[k]
-    return _all
+class TerminalCursor:
+
+    @staticmethod
+    def write(out:str):
+        sys.stdout.write(out)
+    
+    @staticmethod
+    def csi_write(out:str):
+        TerminalCursor.write(f"\033[{out}")
+
+    @staticmethod
+    def up(row=1):
+        if row < 1: return
+        TerminalCursor.csi_write(f'{row}F')
+
+    @staticmethod
+    def left(n:int=1):
+        TerminalCursor.csi_write(f'{n}D')
+
+    @staticmethod
+    def left_end():
+        TerminalCursor.csi_write('1G')
+
+    @staticmethod
+    def clear_line():
+        TerminalCursor.csi_write('2K')
