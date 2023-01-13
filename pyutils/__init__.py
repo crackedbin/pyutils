@@ -8,4 +8,4 @@ from .misc import *
 from .process import *
 from .progress import *
 
-version = "1.5.4"
+version = "1.5.5"
