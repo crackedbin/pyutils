@@ -307,11 +307,13 @@ class SimpleLogger(object):
         if self.__file_handler and level > LoggerLevel.DEBUG:
             self.__file_handler.setLevel(level)
 
-    def set_callback(self, level:Union[str, int], callback:Callable[[ByteString], None], channel:str=''):
-        self.channel(channel).set_callback(level, callback)
+    def set_callback(self, level:Union[str, int], callback:Callable[[ByteString], None]):
+        for channel in self.__channels.values():
+            channel.set_callback(level, callback)
 
-    def clear_callback(self, level:Union[str, int], channel:str=''):
-        self.channel(channel).clear_callback(level)
+    def clear_callback(self, level:Union[str, int]):
+        for channel in self.__channels.values():
+            channel.clear_callback(level)
 
     def log(self, msg, level=LoggerLevel.INFO, channel_name:str=''):
         self.channel(channel_name).log(msg, level)
