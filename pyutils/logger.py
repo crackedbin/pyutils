@@ -111,7 +111,7 @@ class LoggerChannel:
         name_to_show = self.__name_to_show if should_display_name else ''
         self.__host.logger.log(level, msg, extra={'channel': name_to_show})
         if level not in self.__callbacks: return
-        self.__callbacks[level](msg)
+        self.__callbacks[level](msg, self.__host)
 
     def log(self, msg, level=LoggerLevel.INFO):
         self.__do_log(msg, level)
@@ -152,7 +152,9 @@ class LoggerChannel:
     def critical_col(self, msgs:Iterable, width:int, spliter:str='|'):
         self.log_col(msgs, width, spliter, SimpleLogger.CRITICAL)
 
-    def set_callback(self, level:Union[str, int], callback:Callable[[ByteString], None]):
+    def set_callback(
+        self, level:Union[str, int], callback:Callable[[ByteString, SimpleLogger], None]
+    ):
         if isinstance(level, str): level = LoggerLevel.get_level(level)
         self.__callbacks[level] = callback
 
@@ -307,7 +309,9 @@ class SimpleLogger(object):
         if self.__file_handler and level > LoggerLevel.DEBUG:
             self.__file_handler.setLevel(level)
 
-    def set_callback(self, level:Union[str, int], callback:Callable[[ByteString], None]):
+    def set_callback(
+        self, level:Union[str, int], callback:Callable[[ByteString, SimpleLogger], None]
+    ):
         for channel in self.__channels.values():
             channel.set_callback(level, callback)
 
