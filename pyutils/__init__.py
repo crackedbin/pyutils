@@ -9,4 +9,4 @@ from .process import *
 from .progress import *
 from .network import *
 
-version = "1.5.5"
+version = "1.6.0"

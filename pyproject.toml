@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyutils"
+version = "1.6.0"
+authors = [{ name = "7o8v", email = "269134615@qq.com" }]
+description = "A personal collection of useful Python utilities"
+requires-python = ">=3.7"
+license = { text = "Apache-2.0" }
+classifiers = ["Programming Language :: Python :: 3"]
