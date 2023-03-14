@@ -359,6 +359,31 @@ class SimpleLogger(object):
     def for_current_file():
         return SimpleLogger(os.path.basename(__file__))
 
+'''
+TODO: 实现一个LazySimpleLogger，用于在需要的时候才初始化SimpleLogger，
+      而不需要每次继承SimpleLogger时都显示地调用__init__方法。
+候选方案：
+    1. 首先在实现一个SimpleLogger.__getattr__
+        ```
+        def __getattr__(self, attr:str, *args, **kwargs):
+            return self.__getattribute__(attr)
+        ```
+    2. 然后在实现一个LazySimpleLogger，它的__getattr__方法中调用SimpleLogger.__getattr__
+        ```
+        class LazySimpleLogger(SimpleLogger):
+
+        _lazy_logger_initialized = False
+
+        def __getattr__(self, attr:str, *args, **kwargs):
+            if not SimpleLogger.__getattr__(self, '_lazy_logger_initialized'):
+                SimpleLogger.__setattr__(self, '_lazy_logger_initialized', True)
+                SimpleLogger.__init__(self)
+            return SimpleLogger.__getattr__(self, attr, *args, **kwargs)
+        ```
+该方案会对SimpleLogger的性能造成一定影响，因为增加了__getattr__这个方法，
+导致SimpleLogger的性能下降约20%。
+'''
+
 class LogMerger(TextIO):
 
     def __init__(self):
