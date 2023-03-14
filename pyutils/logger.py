@@ -294,12 +294,6 @@ class SimpleLogger(object):
             self.__raw_logger.removeHandler(self.__file_handler)
             self.__file_handler = None
 
-    def setLevel(self, level:Union[str, int]):
-        '''
-            deprecated, please use `set_level` instead.
-        '''
-        self.set_level(level)
-
     def set_level(self, level:Union[str, int]):
         if isinstance(level, str): level = LoggerLevel.get_level(level)
         self.__raw_logger.setLevel(level)
