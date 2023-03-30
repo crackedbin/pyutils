@@ -88,7 +88,6 @@ class ProbCalculator:
         for item_range, item in self.__items_with_range:
             if random_num in item_range: return item
         if not item: item = random.choice(self.__items)
-        assert item
         return item 
     
     def pop(self):
@@ -189,13 +188,11 @@ class NumberRangeEnd:
     RIGHT   = 2
 
     def __init__(
-        self, value:Union[int, float], closed:bool, 
-        position:Union[NumberRangeEnd.LEFT, NumberRangeEnd.RIGHT]
+        self, value:Union[int, float], closed:bool, position
     ):
-        self.__value = value
-        self.__closed = closed
-        self.__position = position
-        assert self.__position in [NumberRangeEnd.LEFT, NumberRangeEnd.RIGHT]
+        self.value = value
+        self.closed = closed
+        self.position = position
 
     def __repr__(self):
         if self.closed:
@@ -204,65 +201,50 @@ class NumberRangeEnd:
             return f"({self.value})"
 
     def __eq__(self, item:NumberRangeEnd):
-        assert self.__position == item.__position
         return self.value == item.value and self.closed == item.closed
-    
+
     def __lt__(self, item:NumberRangeEnd):
-        assert self.__position == item.__position
         if self.value < item.value:
             return True
-        
 
         if self.value == item.value :
             if not self.closed and item.closed:
-                if self.__position == NumberRangeEnd.RIGHT:
+                if self.position == NumberRangeEnd.RIGHT:
                     return True
             elif self.closed and not item.closed:
-                if self.__position == NumberRangeEnd.LEFT:
+                if self.position == NumberRangeEnd.LEFT:
                     return True
         
         return False
 
     def __gt__(self, item:NumberRangeEnd):
-        assert self.__position == item.__position
         if self.value > item.value:
             return True
         
         if self.value == item.value:
             if self.closed and not item.closed:
-                if self.__position == NumberRangeEnd.RIGHT:
+                if self.position == NumberRangeEnd.RIGHT:
                     return True
             elif not self.closed and item.closed:
-                if self.__position == NumberRangeEnd.LEFT:
+                if self.position == NumberRangeEnd.LEFT:
                     return True
         
         return False
-    
+
     def __le__(self, item:NumberRangeEnd):
-        assert self.__position == item.__position
         return self == item or self < item
     
     def __ge__(self, item:NumberRangeEnd):
-        assert self.__position == item.__position
         return self == item or self > item
 
     def __ne__(self, item:NumberRangeEnd):
-        assert self.__position == item.__position
         return not (self == item)
-    
-    @property
-    def value(self):
-        return self.__value
-    
-    @property
-    def closed(self):
-        return self.__closed
 
     def is_left(self):
-        return self.__position == NumberRangeEnd.LEFT
+        return self.position == NumberRangeEnd.LEFT
     
     def is_right(self):
-        return self.__position == NumberRangeEnd.RIGHT
+        return self.position == NumberRangeEnd.RIGHT
     
     @staticmethod
     def left(value:Union[int, float], closed:bool):
@@ -287,37 +269,28 @@ class NumberRange:
     STATUS_INVALID_VALUE    = 5
     
     def __init__(self, left:NumberRangeEnd, right:NumberRangeEnd, base:int=None):
-        self.__left = left
-        self.__right = right
-        self.__base = base
-        assert isinstance(self.__base, int) or base is None
-        assert self.status != NumberRange.STATUS_INVALID_VALUE
+        self.left = left
+        self.right = right
+        self.base = base
 
     def __repr__(self) -> str:
         pre = '[' if self.left.closed else '('
         suf = ']' if self.right.closed else ')'
-        if self.__base is None:
+        if self.base is None:
             return f"{pre}{self.left.value}, {self.right.value}{suf}"
         else:
-            return f"{pre}{self.left.value}, {self.right.value}{suf}{{{self.__base}}}"
+            return f"{pre}{self.left.value}, {self.right.value}{suf}{{{self.base}}}"
 
     __str__ : __repr__
 
     def __contains__(self, item:Union[NumberRange, int]):
-        assert self.valid
         if isinstance(item, int):
-            left = NumberRangeEnd(item, True, NumberRangeEnd.LEFT)
-            right = NumberRangeEnd(item, True, NumberRangeEnd.RIGHT)
-            return NumberRange(left, right) in self
-        return self.left <= item.left and self.right >= item.right
-
-    @property
-    def left(self):
-        return self.__left
-    
-    @property
-    def right(self):
-        return self.__right
+            return (
+                (self.left.value < item or (self.left.closed and self.left.value == item)) 
+                and (item < self.right.value or (self.right.closed and self.right.value == item))
+            )
+        else:
+            return self.left <= item.left and self.right >= item.right
 
     @property
     def valid(self):
@@ -339,16 +312,12 @@ class NumberRange:
         
         return NumberRange.STATUS_OK
 
-    @property
-    def base(self):
-        return self.__base
-
     def random_choice(self, is_float:bool=False, step:int=1, mode:float=None):
         '''
             随机生成区间内的一个数字
         '''
         if not is_float:
-            if self.__base is None:
+            if self.base is None:
                 return self.random_choice_int(step=step)
             else:
                 return self.random_choice_int_with_base()
@@ -356,25 +325,19 @@ class NumberRange:
             return self.random_choice_float(mode=mode)
 
     def random_choice_int(self, step:int=1):
-        assert self.valid
         start = self.left.value if self.left.closed else self.left.value + 1
         end = self.right.value + 1 if self.right.closed else self.right.value
         return random.randrange(start, end, step)
 
     def random_choice_int_with_base(self):
-        assert self.valid
-        assert isinstance(self.__base, int)
-        assert self.__base != 0
         left_value = self.left.value if self.left.closed else self.left.value + 1
         right_value = self.right.value if self.right.closed else self.right.value - 1
-        assert right_value - left_value >= self.__base
-        m = left_value % self.__base
-        start = left_value if m == 0 else left_value + abs(self.__base - m)
+        m = left_value % self.base
+        start = left_value if m == 0 else left_value + abs(self.base - m)
         end = right_value + 1
-        return random.randrange(start, end, abs(self.__base))
+        return random.randrange(start, end, abs(self.base))
 
     def random_choice_float(self, mode:float=None):
-        assert self.valid
         return random.triangular(self.left.value, self.right.value, mode)
 
     @staticmethod
@@ -410,7 +373,6 @@ class Singleton(type):
         return cls._instances[cls]
 
 def md5_update_from_file(filename:os.PathLike, hash:hashlib._Hash) -> hashlib._Hash:
-    assert Path(filename).is_file()
     with open(str(filename), "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             hash.update(chunk)
@@ -423,7 +385,6 @@ def md5_file(filename:os.PathLike) -> str:
     return str(md5_update_from_file(filename, hashlib.md5()).hexdigest())
 
 def md5_update_from_dir(directory:os.PathLike, hash: hashlib._Hash) -> hashlib._Hash:
-    assert Path(directory).is_dir()
     for path in sorted(Path(directory).iterdir(), key=lambda p: str(p).lower()):
         hash.update(path.name.encode())
         if path.is_file():
