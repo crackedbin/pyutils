@@ -81,23 +81,19 @@ class LoggerChannel:
     DEFAULT_NAME_PADDING = '.'
 
     def __init__(self, host:SimpleLogger, channel_name:str):
+        self.name = channel_name
         self.__host = host
-        self.__name = channel_name
         self.__enable = True
         self.__callbacks = {}
         self.should_display_name:bool = True
         _length = self.__host.channel_name_length
         if isinstance(_length, int):
-            if len(self.__name) > _length:
-                self.__name_to_show = f"({self.__name[:_length]})"
+            if len(self.name) > _length:
+                self.__name_to_show = f"({self.name[:_length]})"
             else:
-                self.__name_to_show = f"({self.__name.rjust(_length, self.DEFAULT_NAME_PADDING)})"
+                self.__name_to_show = f"({self.name.rjust(_length, self.DEFAULT_NAME_PADDING)})"
         else:
-            self.__name_to_show = f"({self.__name})"
-
-    @property
-    def name(self):
-        return self.__name
+            self.__name_to_show = f"({self.name})"
 
     def enable(self):
         self.__enable = True
@@ -109,7 +105,7 @@ class LoggerChannel:
         if not self.__enable: return
         should_display_name = self.__host.should_display_channel_name and self.should_display_name
         name_to_show = self.__name_to_show if should_display_name else ''
-        self.__host.logger.log(level, msg, extra={'channel': name_to_show})
+        self.__host.raw_logger.log(level, msg, extra={'channel': name_to_show})
         if level not in self.__callbacks: return
         self.__callbacks[level](msg, self.__host)
 
@@ -209,31 +205,23 @@ class SimpleLogger(object):
         else:
             self.__name = logger_name
 
-        self.__raw_logger:logging.Logger = logging.getLogger(self.__name)
+        self.raw_logger:logging.Logger = logging.getLogger(self.__name)
 
         self.__file_handler = None
         self.__stream_handler = None
 
         self.__channels:dict[str, LoggerChannel] = {}
-        self.__channel_name_length:Union[int, None] = channel_name_length
+        self.channel_name_length:Union[int, None] = channel_name_length
         self.should_display_channel_name:bool = True
 
-        self.__raw_logger.handlers.clear()
-        self.__raw_logger.propagate = False # 如果该属性为True,日志消息会传递到更高级的记录器中(比如根记录器)导致日志被多次打印输出。
+        self.raw_logger.handlers.clear()
+        self.raw_logger.propagate = False # 如果该属性为True,日志消息会传递到更高级的记录器中(比如根记录器)导致日志被多次打印输出。
         self.enable_stream(enable_stream)
         self.enable_file(enable_file)
         self.set_level(SimpleLogger.DEFAULT_LOGGING_LEVEL)
 
         # not to display default channel name
         self.channel().should_display_name = False
-
-    @property
-    def channel_name_length(self):
-        return self.__channel_name_length
-
-    @property
-    def logger(self):
-        return self.__raw_logger
 
     def __create_channel(self, name:str):
         if name in self.__channels:
@@ -256,9 +244,9 @@ class SimpleLogger(object):
         if enable:
             self.__stream_handler = logging.StreamHandler()
             self.__stream_handler.setFormatter(SimpleStreamFormatter())
-            self.__raw_logger.addHandler(self.__stream_handler)
+            self.raw_logger.addHandler(self.__stream_handler)
         elif self.__stream_handler:
-            self.__raw_logger.removeHandler(self.__stream_handler)
+            self.raw_logger.removeHandler(self.__stream_handler)
             self.__stream_handler = None
 
     def enable_merger(self):
@@ -289,14 +277,14 @@ class SimpleLogger(object):
                 SimpleLogger.FILE_FORMAT
             ))
             self.__file_handler.setLevel(LoggerLevel.INFO)
-            self.__raw_logger.addHandler(self.__file_handler)
+            self.raw_logger.addHandler(self.__file_handler)
         elif self.__file_handler:
-            self.__raw_logger.removeHandler(self.__file_handler)
+            self.raw_logger.removeHandler(self.__file_handler)
             self.__file_handler = None
 
     def set_level(self, level:Union[str, int]):
         if isinstance(level, str): level = LoggerLevel.get_level(level)
-        self.__raw_logger.setLevel(level)
+        self.raw_logger.setLevel(level)
         if self.__stream_handler:
             self.__stream_handler.setLevel(level)
         # 不在日志文件中记录调试信息

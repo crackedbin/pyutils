@@ -33,19 +33,11 @@ def async_execute(args:list, env:dict=None) -> subprocess.Popen:
 class Event:
 
     def __init__(self, name:str, **args):
-        self.__name = name
-        self.__args = args
-    
-    @property
-    def name(self):
-        return self.__name
-    
-    @property
-    def args(self):
-        return self.__args
+        self.name = name
+        self.args = args
 
     def get_arg(self, k):
-        return self.__args.get(k)
+        return self.args.get(k)
 
 class EventTarget:
     '''
