@@ -16,7 +16,7 @@ from pyutils.exception import NoItem
 __all__ = [
     "safe_uuid", "percent", "ProbCalculator","md5_file", "md5_dir", 
     "RandomDict", 'NumberRangeEnd', 'NumberRange', 'Singleton',
-    'TerminalCursor'
+    'TerminalCursor', 'split_list'
 ]
 
 def safe_uuid():
@@ -28,6 +28,22 @@ def percent(mole):
         根据mole大小,随机返回True或False,mole越大True的几率越大
     '''
     return random.randrange(0, 100) <= mole
+
+def split_list(lst:list, num:int):
+    '''
+        尽量平均地将lst分割为num个子列表
+    '''
+    avg = len(lst) // num  # 每个子列表的平均长度
+    rem = len(lst) % num  # 余数，用于处理无法整除的情况
+    result = []
+    index = 0
+
+    for i in range(num):
+        length = avg + 1 if i < rem else avg
+        result.append(lst[index:index + length])
+        index += length
+
+    return result
 
 class ProbCalculator:
 
