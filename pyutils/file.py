@@ -7,51 +7,8 @@ from pathlib import Path
 from typing import Callable
 
 __all__ = [
-    "read_file", "write_file", "mkdir", "mvdir",
-    "find_all_files_by_suffix", "delete_dir",
-    "delete_file", "find_files", 'import_from'
+    "find_files", 'import_from'
 ]
-
-
-def _open(filepath:os.PathLike, mode:str, encoding:str='utf-8'):
-    if 'b' in mode:
-        return open(filepath, mode)
-    else:
-        return open(filepath, mode, encoding=encoding)
-
-def read_file(filepath:os.PathLike, mode:str="r", lines: bool = False, encoding='utf-8'):
-    with _open(filepath, mode, encoding=encoding) as fd:
-        if not lines:
-            content = fd.read()
-        else:
-            content = fd.readlines()
-    return content
-
-def write_file(filepath:os.PathLike, content, mode="w", lines: bool = False):
-    with _open(filepath, mode) as f:
-        if not lines:
-            f.write(content)
-        else:
-            f.writelines(content)
-
-def delete_dir(dirpath:os.PathLike):
-    shutil.rmtree(dirpath, ignore_errors=True)
-
-def delete_file(filepath:os.PathLike):
-    if not os.path.exists(filepath):
-        return
-    os.remove(filepath)
-
-def mvdir(src:os.PathLike, dst:os.PathLike):
-    shutil.move(src, dst)
-
-def mkdir(path:os.PathLike, parent:bool=True):
-    if os.path.exists(path):
-        return
-    if parent:
-        os.makedirs(path)
-    else:
-        os.mkdir(path)
 
 def find_files(
     _dir: os.PathLike, prefix: str = "", suffix: str = "", 
@@ -77,10 +34,6 @@ def find_files(
                 continue
             result.append(Path(os.path.join(dirpath, file)))
     return result
-
-def find_all_files_by_suffix(target_dir: os.PathLike, suffix: str):
-    '''deprecated, use `find_files` insted'''
-    return find_files(target_dir, suffix=suffix)
 
 def import_from(module_dir:os.PathLike) -> dict[str, object]:
     '''
