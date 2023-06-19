@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import inspect
 import logging
 
 from logging import LogRecord, handlers, Formatter, Logger
@@ -26,7 +27,7 @@ class LogLevel:
     ERROR       = logging.ERROR
     CRITICAL    = logging.CRITICAL
 
-    level2name = {
+    LEVEL_MAP = {
         CRITICAL: 'CRITICAL',
         ERROR: 'ERROR',
         WARNING: 'WARNING',
@@ -34,7 +35,7 @@ class LogLevel:
         DEBUG: 'DEBUG',
         SUC: 'SUC'
     }
-    name2level = {
+    NAME_MAP = {
         'CRITICAL': CRITICAL,
         'ERROR': ERROR,
         'WARNING': WARNING,
@@ -45,13 +46,31 @@ class LogLevel:
 
     @classmethod
     def get_level(cls, level:Union[str, int]):
-        result = cls.level2name.get(level)
+        result = cls.LEVEL_MAP.get(level)
         if result is not None:
             return result
-        result = cls.name2level.get(level)
+        result = cls.NAME_MAP.get(level)
         if result is not None:
             return result
         return "Level %s" % level
+
+    @classmethod
+    def level2name(cls, level:int):
+        return cls.LEVEL_MAP.get(level, f"Level {level}")
+
+    @classmethod
+    def name2level(cls, name:str):
+        return cls.NAME_MAP.get(name, None)
+
+    @classmethod
+    def just_level(cls, may_level:Union[int, str]) -> int:
+        if isinstance(may_level, int): return may_level
+        return cls.name2level(may_level)
+
+    @classmethod
+    def just_name(cls, may_name:Union[int, str]) -> str:
+        if isinstance(may_name, str): return may_name
+        return cls.level2name(may_name)
 
 logging.addLevelName(LogLevel.SUC, 'SUC')
 
@@ -74,13 +93,13 @@ class SimpleStreamFormatter(logging.Formatter):
     }
 
     FORMATTERS = {'default': Formatter(STREAM_FORMAT)}
-    for name, level in LogLevel.name2level.items():
+    for name, level in LogLevel.NAME_MAP.items():
         FORMATTERS[level] = Formatter(colorful(COLOR[name], STREAM_FORMAT))
 
     def enable_date(self):
         _format = f"%(asctime)s - {self.STREAM_FORMAT}"
         self.FORMATTERS = {'default': Formatter(_format)}
-        for name, level in LogLevel.name2level.items():
+        for name, level in LogLevel.NAME_MAP.items():
             self.FORMATTERS[level] = Formatter(colorful(self.COLOR[name], _format))
 
     def format(self, record:LogRecord) -> str:  
@@ -179,14 +198,27 @@ class LoggerChannel:
     def critical_col(self, msgs:Iterable, width:int, spliter:str='|'):
         self.log_col(msgs, width, spliter, LogLevel.CRITICAL)
 
+    def callback(self, level:Union[str, int]):
+        def decorator(func):
+            self.set_callback(level, func)
+        return decorator
+
     def set_callback(
         self, level:Union[str, int], callback:Callable[[ByteString, SimpleLogger], None]
     ):
-        if isinstance(level, str): level = LogLevel.get_level(level)
-        self.__callbacks[level] = callback
+        sig = inspect.signature(callback)
+        param_count = len(sig.parameters)
+        def wrap(msg, logger):
+            if param_count < 1:
+                return callback()
+            elif param_count == 1:
+                return callback(msg)
+            elif param_count >= 2:
+                return callback(msg, logger)
+        self.__callbacks[LogLevel.just_level(level)] = wrap
 
     def clear_callback(self, level:Union[str, int]):
-        if isinstance(level, str): level = LogLevel.get_level(level)
+        level = LogLevel.just_level(level)
         if level not in self.__callbacks: return
         self.__callbacks.pop(level)
 
@@ -243,6 +275,8 @@ class SimpleLogger(object):
         self.channel_name_length:Optional[int] = channel_name_length
         self.should_display_channel_name = True
 
+        self.callbacks:dict[int, list[Callable]] = {}
+
         self.raw_logger.handlers.clear()
         self.raw_logger.propagate = False # 如果该属性为True,日志消息会传递到更高级的记录器中(比如根记录器)导致日志被多次打印输出。
         self.enable_stream(enable_stream)
@@ -256,6 +290,9 @@ class SimpleLogger(object):
         if name in self.channels:
             raise LoggerException(f"duplicate logger channel name: {name}")
         self.channels[name] = LoggerChannel(self, name)
+        for level, callbacks in self.callbacks.items():
+            for callback in callbacks:
+                self.channels[name].set_callback(level, callback)
 
     def channel(self, name:str=''):
         name = name if name else SimpleLogger.DEFAULT_CHANNEL_NAME
@@ -312,7 +349,7 @@ class SimpleLogger(object):
             self.file_handler = None
 
     def set_level(self, level:Union[str, int]):
-        if isinstance(level, str): level = LogLevel.get_level(level)
+        level = LogLevel.just_level(level)
         self.raw_logger.setLevel(level)
         if self.stream_handler:
             self.stream_handler.setLevel(level)
@@ -320,15 +357,24 @@ class SimpleLogger(object):
         if self.file_handler and level > LogLevel.DEBUG:
             self.file_handler.setLevel(level)
 
+    def callback(self, level:Union[str, int]):
+        def decorator(func):
+            self.set_callback(level, func)
+        return decorator
+
     def set_callback(
         self, level:Union[str, int], callback:Callable[[ByteString, SimpleLogger], None]
     ):
+        level = LogLevel.just_level(level)
+        self.callbacks.setdefault(level, []).append(callback)
         for channel in self.channels.values():
             channel.set_callback(level, callback)
 
     def clear_callback(self, level:Union[str, int]):
+        level = LogLevel.just_level(level)
         for channel in self.channels.values():
             channel.clear_callback(level)
+        self.callbacks[level] = []
 
     def log(self, msg, level=LogLevel.INFO, channel_name:str=''):
         self.channel(channel_name).log(msg, level)
