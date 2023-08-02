@@ -7,6 +7,8 @@ import sys
 import inspect
 import logging
 
+from enum import Enum
+from dataclasses import dataclass
 from logging import LogRecord, handlers, Formatter, Logger
 from typing import Callable, Iterable, ByteString, TextIO, Union, Optional
 from pathlib import Path
@@ -14,53 +16,62 @@ from pathlib import Path
 from pyutils.misc import TerminalCursor
 from pyutils.exception import LoggerException
 
-__all__ = [
-    'SimpleLogger'
-]
+__all__ = ['SimpleLogger', 'LoggerOption', 'LogiSphere']
 
-class LogLevel:
+class LogLevel(int, Enum):
 
+    VERBOSE     = logging.DEBUG - 1
     DEBUG       = logging.DEBUG
     INFO        = logging.INFO
-    SUC         = logging.INFO + 1
+    SUCCESS     = logging.INFO + 1
     WARNING     = logging.WARNING
     ERROR       = logging.ERROR
     CRITICAL    = logging.CRITICAL
 
-    LEVEL_MAP = {
-        CRITICAL: 'CRITICAL',
-        ERROR: 'ERROR',
-        WARNING: 'WARNING',
-        INFO: 'INFO',
-        DEBUG: 'DEBUG',
-        SUC: 'SUC'
-    }
-    NAME_MAP = {
-        'CRITICAL': CRITICAL,
-        'ERROR': ERROR,
-        'WARNING': WARNING,
-        'INFO': INFO,
-        'DEBUG': DEBUG,
-        'SUC': SUC
-    }
+    @classmethod
+    def level_map(cls):
+        return {
+            cls.VERBOSE: 'VERBOSE',
+            cls.DEBUG: 'DEBUG',
+            cls.INFO: 'INFO',
+            cls.SUCCESS: 'SUCCESS',
+            cls.WARNING: 'WARNING',
+            cls.ERROR: 'ERROR',
+            cls.CRITICAL: 'CRITICAL'
+        }
+
+    @classmethod
+    def name_map(cls):
+        return {
+            'VERBOSE': cls.VERBOSE,
+            'DEBUG': cls.DEBUG,
+            'INFO': cls.INFO,
+            'SUC': cls.SUCCESS,
+            'SUCCESS': cls.SUCCESS,
+            'WARN': cls.WARNING,
+            'WARNING': cls.WARNING,
+            'ERROR': cls.ERROR,
+            'ERR': cls.ERROR,
+            'CRITICAL': cls.CRITICAL
+        }
 
     @classmethod
     def get_level(cls, level:Union[str, int]):
-        result = cls.LEVEL_MAP.get(level)
+        result = cls.level_map().get(level)
         if result is not None:
             return result
-        result = cls.NAME_MAP.get(level)
+        result = cls.name_map().get(level)
         if result is not None:
             return result
-        return "Level %s" % level
+        return f"Level {level}"
 
     @classmethod
     def level2name(cls, level:int):
-        return cls.LEVEL_MAP.get(level, f"Level {level}")
+        return cls.level_map().get(level, f"Level {level}")
 
     @classmethod
     def name2level(cls, name:str):
-        return cls.NAME_MAP.get(name, None)
+        return cls.name_map().get(name, None)
 
     @classmethod
     def just_level(cls, may_level:Union[int, str]) -> int:
@@ -72,7 +83,8 @@ class LogLevel:
         if isinstance(may_name, str): return may_name
         return cls.level2name(may_name)
 
-logging.addLevelName(LogLevel.SUC, 'SUC')
+logging.addLevelName(LogLevel.SUCCESS, 'SUCCESS')
+logging.addLevelName(LogLevel.VERBOSE, 'VERBOSE')
 
 color_endc = '\x1b[0m'
 def colorful(color:str, content:str):
@@ -83,23 +95,30 @@ class SimpleStreamFormatter(logging.Formatter):
     STREAM_FORMAT = r'[%(name)s]%(channel)s %(levelname)s: %(message)s'
 
     COLOR = {
-        'INFO'      : '\x1b[94m',
-        'WARNING'   : '\x1b[93m',
-        'ERROR'     : '\x1b[91m',
-        'CRITICAL'  : '\x1b[41m',
-        'DEBUG'     : '\x1b[95m',
-        'SUC'       : '\x1b[32m',
+        'VERBOSE'   : '\x1b[0;36m',
+        'DEBUG'     : '\x1b[0;35m',
+        'INFO'      : '\x1b[1;34m',
+        'SUCCESS'   : '\x1b[1;32m',
+        'WARNING'   : '\x1b[1;33m',
+        'ERROR'     : '\x1b[1;31m',
+        'CRITICAL'  : '\x1b[0;37;41m',
         'ENDC'      : '\x1b[0m'
     }
 
     FORMATTERS = {'default': Formatter(STREAM_FORMAT)}
-    for name, level in LogLevel.NAME_MAP.items():
+    for level, name in LogLevel.level_map().items():
         FORMATTERS[level] = Formatter(colorful(COLOR[name], STREAM_FORMAT))
+
+    def __init__(
+        self, fmt: str | None = None, datefmt: str | None = None, style = "%", 
+        validate: bool = True
+    ):
+        logging.Formatter.__init__(self, fmt, datefmt, style, validate)
 
     def enable_date(self):
         _format = f"%(asctime)s - {self.STREAM_FORMAT}"
         self.FORMATTERS = {'default': Formatter(_format)}
-        for name, level in LogLevel.NAME_MAP.items():
+        for name, level in LogLevel.name_map().items():
             self.FORMATTERS[level] = Formatter(colorful(self.COLOR[name], _format))
 
     def format(self, record:LogRecord) -> str:  
@@ -110,100 +129,132 @@ class SimpleStreamFormatter(logging.Formatter):
 
         if hasattr(record, 'channel'):
             channel = getattr(record, 'channel')
-            if channel == 'default':
-                setattr(record, 'channel', '')
-            else:
-                setattr(record, 'channel', f"{channel}")
+            setattr(record, 'channel', f"{channel}")
 
         return formatter.format(record)
 
-class LoggerChannel:
-    '''
-        一个LoggerBase及其子类可以拥有多个LoggerChannel
-    '''
+@dataclass
+class LoggerOption:
+    @dataclass
+    class Channel:
+        name_length:int | None = None
+        display_name:bool = True
+        name_padding:str = '.'
+    @dataclass
+    class File:
+        enable:bool = False
+        root_dir:Path | None = None
+        dirname:str | None = None
+        filename:str | None = None
+        format:str = r'%(asctime)s - [%(name)s%(channel)s] %(levelname)s: %(message)s'
+        default_level:int = LogLevel.INFO
+    @dataclass
+    class Stream:
+        enable:bool = True
+        format:str = r'%(asctime)s - [%(name)s]%(channel)s %(levelname)s: %(message)s'
+        default_level:int = LogLevel.INFO
+    name:str | None = None
+    extend_name:str | None = None
+    share_global:bool = False
+    default_channel_name:str = "default"
+    channel:Channel = Channel()
+    stream:Stream = Stream()
+    file:File = File()
 
-    DEFAULT_NAME_PADDING = '.'
+class LoggerInterface:
 
-    def __init__(self, host:SimpleLogger, channel_name:str):
-        self.name = channel_name
-        self.__host = host
-        self.__enable = True
-        self.__callbacks = {}
-        self.should_display_name:bool = True
-        _length = self.__host.channel_name_length
-        if isinstance(_length, int):
-            if len(self.name) > _length:
-                self.__name_to_show = f"({self.name[:_length]})"
+    def log(self, msg:str, level:LogLevel):
+        raise NotImplementedError()
+
+    def verbose(self, msg:str):
+        return self.log(msg, LogLevel.VERBOSE)
+
+    def debug(self, msg:str):
+        return self.log(msg, LogLevel.DEBUG)
+    
+    def info(self, msg:str):
+        return self.log(msg, LogLevel.INFO)
+    
+    def suc(self, msg:str):
+        return self.log(msg, LogLevel.SUCCESS)
+    
+    def warning(self, msg:str):
+        return self.log(msg, LogLevel.WARNING)
+    
+    def error(self, msg:str):
+        return self.log(msg, LogLevel.ERROR)
+    
+    def critical(self, msg:str):
+        return self.log(msg, LogLevel.CRITICAL)
+
+    def log_col(
+        self, msgs:Iterable[str], width:int, spliter:str='|', 
+        level:LogLevel=LogLevel.INFO
+    ):
+        raise NotImplementedError()
+
+    def verbose_col(self, msgs:Iterable[str], width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LogLevel.VERBOSE)
+
+    def debug_col(self, msgs:Iterable[str], width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LogLevel.DEBUG)
+
+    def info_col(self, msgs:Iterable[str], width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LogLevel.INFO)
+
+    def suc_col(self, msgs:Iterable[str], width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LogLevel.SUCCESS)
+
+    def warning_col(self, msgs:Iterable[str], width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LogLevel.WARNING)
+
+    def error_col(self, msgs:Iterable[str], width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LogLevel.ERROR)
+
+    def critical_col(self, msgs:Iterable[str], width:int, spliter:str='|'):
+        self.log_col(msgs, width, spliter, LogLevel.CRITICAL)
+
+class LogiChannel(LoggerInterface):
+
+    def __init__(
+        self, host:LogiSphere, name:str, option:LoggerOption, logger:Logger, 
+        global_callbacks:dict
+    ):
+        self.name = name
+        self.option = option
+        self.enable = True
+        self.logger = logger
+        self.host = host
+        self.callbacks:dict[int, list[Callable]] = {}
+        self.global_callbacks = global_callbacks
+        name_length = self.option.channel.name_length
+        if isinstance(name_length, int):
+            if len(self.name) > name_length:
+                self.name_to_show = f"({self.name[:name_length]})"
             else:
-                self.__name_to_show = f"({self.name.rjust(_length, self.DEFAULT_NAME_PADDING)})"
+                self.name_to_show = f"({self.name.rjust(name_length, self.option.channel.name_padding)})"
+        elif self.name:
+            self.name_to_show = f"({self.name})"
         else:
-            self.__name_to_show = f"({self.name})"
+            self.name_to_show = ""
 
-    def enable(self):
-        self.__enable = True
-
-    def disable(self):
-        self.__enable = False
-
-    def __do_log(self, msg, level):
-        if not self.__enable: return
-        should_display_name = self.__host.should_display_channel_name and self.should_display_name
-        name_to_show = self.__name_to_show if should_display_name else ''
-        self.__host.raw_logger.log(level, msg, extra={'channel': name_to_show})
-        if level not in self.__callbacks: return
-        self.__callbacks[level](msg, self.__host)
-
-    def log(self, msg, level=LogLevel.INFO):
-        self.__do_log(msg, level)
-
-    def debug(self, msg):
-        self.log(msg, LogLevel.DEBUG)
-
-    def info(self, msg):
-        self.log(msg, LogLevel.INFO)
-
-    def suc(self, msg):
-        self.log(msg, LogLevel.SUC)
-
-    def warning(self, msg):
-        self.log(msg, LogLevel.WARNING)
-
-    def error(self, msg):
-        self.log(msg, LogLevel.ERROR)
-
-    def critical(self, msg):
-        self.log(msg, LogLevel.CRITICAL)
+    def log(self, msg:ByteString, level=LogLevel.INFO):
+        if not self.enable: return
+        name_to_show = self.name_to_show if self.option.channel.display_name else ''
+        self.logger.log(level, msg, extra={'channel': name_to_show})
+        for callback in self.callbacks.setdefault(level, []):
+            callback(msg, self.host)
+        for callback in self.global_callbacks.setdefault(level, []):
+            callback(msg, self.host)
 
     def log_col(self, msgs:Iterable, width:int, spliter:str='|', level=LogLevel.INFO):
+        if not self.enable: return
         msgs = [ f"{str(m).ljust(width)}" for m in msgs]
         spliter = f"{spliter} "
         msg = f"{spliter}{spliter.join(msgs)}"
         self.log(msg, level)
 
-    def debug_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LogLevel.DEBUG)
-
-    def info_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LogLevel.INFO)
-
-    def suc_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LogLevel.SUC)
-
-    def warning_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LogLevel.WARNING)
-
-    def error_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LogLevel.ERROR)
-
-    def critical_col(self, msgs:Iterable, width:int, spliter:str='|'):
-        self.log_col(msgs, width, spliter, LogLevel.CRITICAL)
-
-    def callback(self, level:Union[str, int]):
-        def decorator(func):
-            self.set_callback(level, func)
-        return decorator
-
-    def set_callback(
+    def add_log_callback(
         self, level:Union[str, int], callback:Callable[[ByteString, SimpleLogger], None]
     ):
         sig = inspect.signature(callback)
@@ -215,21 +266,110 @@ class LoggerChannel:
                 return callback(msg)
             elif param_count >= 2:
                 return callback(msg, logger)
-        self.__callbacks[LogLevel.just_level(level)] = wrap
+        self.callbacks.setdefault(LogLevel.just_level(level), []).append(wrap)
 
-    def clear_callback(self, level:Union[str, int]):
+    def clear_log_callbacks(self, level:Union[str, int, None]=None):
+        if level is None:
+            self.callbacks.clear()
+            return
         level = LogLevel.just_level(level)
-        if level not in self.__callbacks: return
-        self.__callbacks.pop(level)
+        self.callbacks.setdefault(level, []).clear()
 
-class SimpleLogger(object):
+class LogiSphere(LoggerInterface):
+
+    def __init__(self, option:LoggerOption=None):
+        LoggerInterface.__init__(self)
+        self.__option = option if option else LoggerOption()
+        self.__channels:dict[str, LogiChannel] = {}
+        self.__callbacks:dict[int, list[Callable]] = {}
+        self.__set_name()
+        self.__init_logger()
+
+    @property
+    def log_option(self):
+        return self.__option
+
+    def __set_name(self):
+        name = self.__option.name
+        if not name: name = self.__class__.__name__
+        if self.__option.extend_name: name = f"{name}-{self.__option.extend_name}"
+        self.__name = name
+
+    def __init_logger(self):
+        if not self.__option.share_global:
+            self.__logger = Logger(self.__name)
+        else:
+            self.__logger = logging.getLogger(self.__name)
+        self.__stream_formatter = SimpleStreamFormatter()
+        self.__file_handler:logging.FileHandler | None = None
+        self.__stream_handler:logging.StreamHandler | None = None
+        self.__logger.handlers.clear()
+        self.__logger.propagate = False
+        self.set_streamlog(self.__option.stream.enable)
+        self.set_filelog(self.__option.file.enable)
+
+    def __create_channel(self, name:str):
+        if name in self.__channels:
+            raise LoggerException(f"duplicate logger channel name: {name}")
+        self.__channels[name] = LogiChannel(
+            self, name, self.__option, self.__logger, self.__callbacks
+        )
+
+    def channel(self, name:str=''):
+        if name not in self.__channels: self.__create_channel(name)
+        return self.__channels[name]
+
+    def set_streamlog(self, enable:bool=True):
+        if enable:
+            self.__stream_handler = logging.StreamHandler()
+            self.__stream_handler.setFormatter(self.__stream_formatter)
+            self.__logger.addHandler(self.__stream_handler)
+        elif self.__stream_handler:
+            self.__logger.removeHandler(self.__stream_handler)
+            self.__stream_handler = None
+
+    def set_filelog(self, enable:bool=True):
+        '''
+            not implement yet
+        '''
+        pass
+
+    def set_level(self, level:Union[str, int]):
+        level = LogLevel.just_level(level)
+        self.__logger.setLevel(level)
+        if self.__stream_handler: self.__stream_handler.setLevel(level)
+        if self.__file_handler: self.__file_handler.setLevel(level)
+
+    def add_log_callback(
+        self, level:Union[str, int], callback:Callable[[ByteString, SimpleLogger], None]
+    ):
+        sig = inspect.signature(callback)
+        param_count = len(sig.parameters)
+        def wrap(msg, logger):
+            if param_count < 1:
+                return callback()
+            elif param_count == 1:
+                return callback(msg)
+            elif param_count >= 2:
+                return callback(msg, logger)
+        self.__callbacks.setdefault(LogLevel.just_level(level), []).append(wrap)
+
+    def clear_log_callbacks(self, level:Union[str, int, None]=None):
+        if level is None:
+            self.__callbacks.clear()
+            return
+        level = LogLevel.just_level(level)
+        self.__callbacks.setdefault(level, []).clear()
+
+    def log(self, msg, level=LogLevel.INFO):
+        self.channel().log(msg, level)
+
+    def log_col(self, msgs:Iterable, width:int, spliter:str='|', level=LogLevel.INFO, channel_name:str=''):
+        self.channel(channel_name).log_col(msgs, width, spliter, level)
+
+class SimpleLogger(LogiSphere):
     '''
-        SimpleLogger推荐当作基类使用，也可以单独使用。
-        子类要使用该接口的功能,需要在`__init__`中调用`SimpleLogger.__init__(self)`。
-        没有提供`logger_name`参数时会自动使用子类的类名作为`logger_name`。
-
-        如果子类有多个实例同时运行且需要对这些实例进行区分,可以调用
-        `SimpleLogger.__init__(self, extend_name=<unique name>)`
+        [Deprecated] use LogiSphere insted
     '''
 
     # https://docs.python.org/zh-cn/3/library/logging.handlers.html#timedrotatingfilehandler
@@ -250,112 +390,22 @@ class SimpleLogger(object):
         enable_stream:bool=True, log_dirname:str='', log_filename:str='',
         channel_name_length:int=None, share_global:bool=False
     ):
-        logger_name = logger_name if logger_name else self.__class__.__name__
-        self.dirname    = log_dirname if log_dirname else logger_name
-        self.filename   = log_filename if log_filename else f"{logger_name}.log"
-
-        # extend_name的作用是防止多进程日志重复问题,当一个类多线程运行时,如果logger name相同
-        # 则会造成logger相互影响
-        self.name = logger_name
-        if extend_name:
-            self.name = f"{logger_name}-{extend_name}"
-        else:
-            self.name = logger_name
-
-        if not share_global:
-            self.raw_logger = Logger(self.name)
-        else:
-            self.raw_logger = logging.getLogger(self.name)
-
-        self.file_handler = None
-        self.stream_handler = None
-        self.stream_formatter = SimpleStreamFormatter()
-
-        self.channels:dict[str, LoggerChannel] = {}
-        self.channel_name_length:Optional[int] = channel_name_length
-        self.should_display_channel_name = True
-
-        self.callbacks:dict[int, list[Callable]] = {}
-
-        self.raw_logger.handlers.clear()
-        self.raw_logger.propagate = False # 如果该属性为True,日志消息会传递到更高级的记录器中(比如根记录器)导致日志被多次打印输出。
-        self.enable_stream(enable_stream)
-        self.enable_file(enable_file)
-        self.set_level(SimpleLogger.DEFAULT_LOGGING_LEVEL)
-
-        # not to display default channel name
-        self.channel().should_display_name = False
-
-    def __create_channel(self, name:str):
-        if name in self.channels:
-            raise LoggerException(f"duplicate logger channel name: {name}")
-        self.channels[name] = LoggerChannel(self, name)
-        for level, callbacks in self.callbacks.items():
-            for callback in callbacks:
-                self.channels[name].set_callback(level, callback)
-
-    def channel(self, name:str=''):
-        name = name if name else SimpleLogger.DEFAULT_CHANNEL_NAME
-        if name not in self.channels: self.__create_channel(name)
-        return self.channels[name]
-
-    @classmethod
-    def set_default_dir(cls, dirpath:os.PathLike):
-        cls.DEFAULT_DIR = Path(dirpath)
-
-    def set_dir(self, log_dir:os.PathLike):
-        self.DEFAULT_DIR = Path(log_dir)
+        option = LoggerOption()
+        option.name = logger_name
+        option.extend_name = extend_name
+        option.file.enable = enable_file
+        option.stream.enable = enable_stream
+        option.file.dirname = log_dirname
+        option.file.filename = log_filename
+        option.channel.name_length = channel_name_length
+        option.share_global = share_global
+        LogiSphere.__init__(self, option)
 
     def enable_stream(self, enable=True):
-        if enable:
-            self.stream_handler = logging.StreamHandler()
-            self.stream_handler.setFormatter(self.stream_formatter)
-            self.raw_logger.addHandler(self.stream_handler)
-        elif self.stream_handler:
-            self.raw_logger.removeHandler(self.stream_handler)
-            self.stream_handler = None
-
-    def enable_merger(self):
-        if not self.stream_handler: return
-        self.stream_handler.setStream(LogMerger())
-
-    def disable_merger(self):
-        if not self.stream_handler: return
-        self.stream_handler.setStream(sys.stdout)
+        self.set_streamlog(enable)
 
     def enable_file(self, enable=True):
-        if enable and (not self.DEFAULT_DIR or not self.DEFAULT_DIR.exists()):
-            self.warning("Not set log_dir or it not exist, can not enable file logging.")
-            return
-
-        if enable:
-            file_log_dir = self.DEFAULT_DIR.joinpath(self.dirname)
-            file_log_path = file_log_dir.joinpath(self.filename)
-            file_log_dir.mkdir(parents=True, exist_ok=True)
-            self.file_handler = handlers.TimedRotatingFileHandler(
-                filename    = file_log_path, 
-                when        = SimpleLogger.FILE_ROATING_WHEN, 
-                interval    = SimpleLogger.FILE_ROATING_INTERVAL, 
-                backupCount = SimpleLogger.FILE_ROATING_BACKCOUNT, 
-                encoding    = 'utf-8'
-            )
-            self.file_handler.setFormatter(logging.Formatter(
-                SimpleLogger.FILE_FORMAT
-            ))
-            self.file_handler.setLevel(LogLevel.INFO)
-            self.raw_logger.addHandler(self.file_handler)
-        elif self.file_handler:
-            self.raw_logger.removeHandler(self.file_handler)
-            self.file_handler = None
-
-    def set_level(self, level:Union[str, int]):
-        level = LogLevel.just_level(level)
-        self.raw_logger.setLevel(level)
-        if self.stream_handler:
-            self.stream_handler.setLevel(level)
-        # 不在日志文件中记录调试信息
-        if self.file_handler and level > LogLevel.DEBUG:
-            self.file_handler.setLevel(level)
+        self.set_filelog(enable)
 
     def callback(self, level:Union[str, int]):
         def decorator(func):
@@ -365,58 +415,10 @@ class SimpleLogger(object):
     def set_callback(
         self, level:Union[str, int], callback:Callable[[ByteString, SimpleLogger], None]
     ):
-        level = LogLevel.just_level(level)
-        self.callbacks.setdefault(level, []).append(callback)
-        for channel in self.channels.values():
-            channel.set_callback(level, callback)
+        self.add_log_callback(level, callback)
 
-    def clear_callback(self, level:Union[str, int]):
-        level = LogLevel.just_level(level)
-        for channel in self.channels.values():
-            channel.clear_callback(level)
-        self.callbacks[level] = []
-
-    def log(self, msg, level=LogLevel.INFO, channel_name:str=''):
-        self.channel(channel_name).log(msg, level)
-
-    def debug(self, msg, channel_name:str=''):
-        self.channel(channel_name).log(msg, LogLevel.DEBUG)
-
-    def info(self, msg, channel_name:str=''):
-        self.channel(channel_name).log(msg, LogLevel.INFO)
-
-    def suc(self, msg, channel_name:str=''):
-        self.channel(channel_name).log(msg, LogLevel.SUC)
-
-    def warning(self, msg, channel_name:str=''):
-        self.channel(channel_name).log(msg, LogLevel.WARNING)
-
-    def error(self, msg, channel_name:str=''):
-        self.channel(channel_name).log(msg, LogLevel.ERROR)
-
-    def critical(self, msg, channel_name:str=''):
-        self.channel(channel_name).log(msg, LogLevel.CRITICAL)
-
-    def log_col(self, msgs:Iterable, width:int, spliter:str='|', level=LogLevel.INFO, channel_name:str=''):
-        self.channel(channel_name).log_col(msgs, width, spliter, level)
-
-    def debug_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.channel(channel_name).log_col(msgs, width, spliter, LogLevel.DEBUG)
-
-    def info_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.channel(channel_name).log_col(msgs, width, spliter, LogLevel.INFO)
-
-    def suc_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.channel(channel_name).log_col(msgs, width, spliter, LogLevel.SUC)
-
-    def warning_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.channel(channel_name).log_col(msgs, width, spliter, LogLevel.WARNING)
-
-    def error_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.channel(channel_name).log_col(msgs, width, spliter, LogLevel.ERROR)
-
-    def critical_col(self, msgs:Iterable, width:int, spliter:str='|', channel_name:str=''):
-        self.channel(channel_name).log_col(msgs, width, spliter, LogLevel.CRITICAL)
+    def clear_callbacks(self, level:Union[str, int]):
+        self.clear_log_callbacks(level)
 
     @staticmethod
     def for_current_file():
