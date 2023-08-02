@@ -7,3 +7,4 @@ from .process import *
 from .progress import *
 from .profile import *
 from .thread import *
+from .observer import *
