@@ -16,7 +16,7 @@ from pathlib import Path
 from pyutils.misc import TerminalCursor
 from pyutils.exception import LoggerException
 
-__all__ = ['SimpleLogger', 'LoggerOption', 'LogiSphere']
+__all__ = ['SimpleLogger', 'LoggerOption', 'LoggerMixin']
 
 class LogLevel(int, Enum):
 
@@ -217,7 +217,7 @@ class LoggerInterface:
 class LogiChannel(LoggerInterface):
 
     def __init__(
-        self, host:LogiSphere, name:str, option:LoggerOption, logger:Logger, 
+        self, host:LoggerMixin, name:str, option:LoggerOption, logger:Logger, 
         global_callbacks:dict
     ):
         self.name = name
@@ -275,7 +275,7 @@ class LogiChannel(LoggerInterface):
         level = LogLevel.just_level(level)
         self.callbacks.setdefault(level, []).clear()
 
-class LogiSphere(LoggerInterface):
+class LoggerMixin(LoggerInterface):
 
     def __init__(self, option:LoggerOption=None):
         LoggerInterface.__init__(self)
@@ -367,7 +367,7 @@ class LogiSphere(LoggerInterface):
     def log_col(self, msgs:Iterable, width:int, spliter:str='|', level=LogLevel.INFO, channel_name:str=''):
         self.channel(channel_name).log_col(msgs, width, spliter, level)
 
-class SimpleLogger(LogiSphere):
+class SimpleLogger(LoggerMixin):
     '''
         [Deprecated] use LogiSphere insted
     '''
@@ -399,7 +399,7 @@ class SimpleLogger(LogiSphere):
         option.file.filename = log_filename
         option.channel.name_length = channel_name_length
         option.share_global = share_global
-        LogiSphere.__init__(self, option)
+        LoggerMixin.__init__(self, option)
 
     def enable_stream(self, enable=True):
         self.set_streamlog(enable)
