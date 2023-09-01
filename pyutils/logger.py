@@ -4,10 +4,12 @@ from __future__ import annotations
 import os
 import inspect
 import logging
+import typing_extensions
 
 from enum import Enum
 from dataclasses import dataclass, field
 from logging import LogRecord, Formatter, Logger
+from logging.handlers import TimedRotatingFileHandler, RotatingFileHandler
 from typing import Callable, Iterable, ByteString, Union
 from pathlib import Path
 
@@ -153,7 +155,18 @@ class FileOption:
     dirname:str | None = None
     filename:str | None = None
     format:str = r'%(asctime)s - [%(name)s%(channel)s] %(levelname)s: %(message)s'
-    default_level:int = LogLevel.INFO
+    default_level:str = "INFO"
+    encoding:str = "utf-8"
+    concurrent:bool = False
+    backup_count:int = 0
+    # Size Rotating
+    rotating:bool = False
+    mode:str = "a"
+    max_bytes:int = 1024 * 1024 # 默认日志文件最大为1M
+    # Time Rotating
+    time_rotating:bool = True
+    when:str = "h"
+    interval:str = 1
 
 @dataclass
 class LoggerOption:
@@ -218,7 +231,7 @@ class LoggerInterface:
     def critical_col(self, msgs:Iterable[str], width:int, spliter:str='|'):
         self.log_col(msgs, width, spliter, LogLevel.CRITICAL)
 
-class LogiChannel(LoggerInterface):
+class LogChannel(LoggerInterface):
 
     def __init__(
         self, host:LoggerMixin, name:str, option:LoggerOption, logger:Logger, 
@@ -284,7 +297,7 @@ class LoggerMixin(LoggerInterface):
     def __init__(self, option:LoggerOption=None):
         LoggerInterface.__init__(self)
         self.__option = option if option else LoggerOption()
-        self.__channels:dict[str, LogiChannel] = {}
+        self.__channels:dict[str, LogChannel] = {}
         self.__callbacks:dict[int, list[Callable]] = {}
         self.__set_name()
         self.__init_logger()
@@ -315,7 +328,7 @@ class LoggerMixin(LoggerInterface):
     def __create_channel(self, name:str):
         if name in self.__channels:
             raise LoggerException(f"duplicate logger channel name: {name}")
-        self.__channels[name] = LogiChannel(
+        self.__channels[name] = LogChannel(
             self, name, self.__option, self.__logger, self.__callbacks
         )
 
@@ -324,6 +337,7 @@ class LoggerMixin(LoggerInterface):
         return self.__channels[name]
 
     def set_streamlog(self, enable:bool=True):
+        if enable == bool(self.__stream_handler): return
         if enable:
             self.__stream_handler = logging.StreamHandler()
             self.__stream_handler.setFormatter(self.__stream_formatter)
@@ -332,11 +346,75 @@ class LoggerMixin(LoggerInterface):
             self.__logger.removeHandler(self.__stream_handler)
             self.__stream_handler = None
 
+    def __get_filelog_path(self):
+        option = self.__option.file
+        root_dir = option.root_dir
+        if not root_dir: raise TypeError("Must set file root dir")
+        root_dir = Path(root_dir)
+        if root_dir.exists() and not root_dir.is_dir():
+            raise RuntimeError(f"Path {root_dir} is not a directory")
+        dirname = option.dirname if option.dirname else self.__name
+        filename = option.filename if option.filename else f"{self.__name}.log"
+        log_dir = root_dir / dirname
+        if not log_dir.exists(): log_dir.mkdir(exist_ok=True, parents=True)
+        return log_dir / filename
+
+    def __get_filehandler(self):
+        opt = self.__option.file
+        filepath = self.__get_filelog_path()
+        encoding = opt.encoding
+        if opt.time_rotating:
+            if opt.concurrent:
+                try:
+                    from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
+                except ModuleNotFoundError:
+                    err_msgs = [
+                        "please install concurrent-log-handler",
+                        "'pip install concurrent-log-handler' or 'poetry add concurrent-log-handler'"
+                    ]
+                    raise ModuleNotFoundError(", ".join(err_msgs))
+                HandlerClass = ConcurrentTimedRotatingFileHandler
+            else:
+                HandlerClass = TimedRotatingFileHandler
+            handler = HandlerClass(
+                filepath, encoding=encoding, when=opt.when, interval=opt.interval,
+                backupCount=opt.backup_count, delay=True
+            )
+        elif opt.rotating:
+            if opt.concurrent:
+                try:
+                    from concurrent_log_handler import ConcurrentRotatingFileHandler
+                except ModuleNotFoundError:
+                    err_msgs = [
+                        "please install concurrent-log-handler",
+                        "'pip install concurrent-log-handler' or 'poetry add concurrent-log-handler'"
+                    ]
+                    raise ModuleNotFoundError(", ".join(err_msgs))
+                HandlerClass = ConcurrentRotatingFileHandler
+            else:
+                HandlerClass = RotatingFileHandler
+            handler = HandlerClass(
+                filepath, encoding=opt.encoding, mode=opt.mode, maxBytes=opt.max_bytes, 
+                backupCount=opt.backup_count, delay=True
+            )
+        else:
+            handler = logging.FileHandler(filepath, encoding=encoding, delay=True)
+        handler.setLevel(LogLevel.just_level(opt.default_level))
+        formatter = Formatter(opt.format)
+        handler.setFormatter(formatter)
+        return handler
+
     def set_filelog(self, enable:bool=True):
         '''
             not implement yet
         '''
-        pass
+        if enable == bool(self.__file_handler): return
+        if enable:
+            self.__file_handler = self.__get_filehandler()
+            self.__logger.addHandler(self.__file_handler)
+        elif self.__file_handler:
+            self.__logger.removeHandler(self.__file_handler)
+            self.__file_handler = None
 
     def set_level(self, level:Union[str, int]):
         level = LogLevel.just_level(level)
@@ -371,11 +449,10 @@ class LoggerMixin(LoggerInterface):
     def log_col(self, msgs:Iterable, width:int, spliter:str='|', level=LogLevel.INFO, channel_name:str=''):
         self.channel(channel_name).log_col(msgs, width, spliter, level)
 
+@typing_extensions.deprecated(
+    "The SimpleLogger is deprecated, use LoggerMixin insted. And SimpleLogger will be removed in version 3.0.0"
+)
 class SimpleLogger(LoggerMixin):
-    '''
-        [Deprecated] use LoggerMixin insted
-    '''
-
     # https://docs.python.org/zh-cn/3/library/logging.handlers.html#timedrotatingfilehandler
     FILE_ROATING_WHEN       = 'H'
     FILE_ROATING_INTERVAL   = 6
