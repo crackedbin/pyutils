@@ -2,21 +2,21 @@
 from __future__ import annotations
 
 import os
-import re
-import sys
 import inspect
 import logging
 
 from enum import Enum
-from dataclasses import dataclass
-from logging import LogRecord, handlers, Formatter, Logger
-from typing import Callable, Iterable, ByteString, TextIO, Union, Optional
+from dataclasses import dataclass, field
+from logging import LogRecord, Formatter, Logger
+from typing import Callable, Iterable, ByteString, Union
 from pathlib import Path
 
-from pyutils.misc import TerminalCursor
 from pyutils.exception import LoggerException
 
-__all__ = ['SimpleLogger', 'LoggerOption', 'LoggerMixin']
+__all__ = [
+    'SimpleLogger', 'LoggerOption', 'LoggerMixin', 'FileOption',
+    'ChannelOption', 'StreamOption'
+]
 
 class LogLevel(int, Enum):
 
@@ -76,11 +76,12 @@ class LogLevel(int, Enum):
     @classmethod
     def just_level(cls, may_level:Union[int, str]) -> int:
         if isinstance(may_level, int): return may_level
+        may_level = may_level.upper()
         return cls.name2level(may_level)
 
     @classmethod
     def just_name(cls, may_name:Union[int, str]) -> str:
-        if isinstance(may_name, str): return may_name
+        if isinstance(may_name, str): return may_name.upper()
         return cls.level2name(may_name)
 
 logging.addLevelName(LogLevel.SUCCESS, 'SUCCESS')
@@ -134,32 +135,35 @@ class SimpleStreamFormatter(logging.Formatter):
         return formatter.format(record)
 
 @dataclass
+class ChannelOption:
+    name_length:int | None = None
+    display_name:bool = True
+    name_padding:str = '.'
+
+@dataclass
+class StreamOption:
+    enable:bool = True
+    format:str = r'%(asctime)s - [%(name)s]%(channel)s %(levelname)s: %(message)s'
+    default_level:int = LogLevel.INFO
+
+@dataclass
+class FileOption:
+    enable:bool = False
+    root_dir:Path | None = None
+    dirname:str | None = None
+    filename:str | None = None
+    format:str = r'%(asctime)s - [%(name)s%(channel)s] %(levelname)s: %(message)s'
+    default_level:int = LogLevel.INFO
+
+@dataclass
 class LoggerOption:
-    @dataclass
-    class Channel:
-        name_length:int | None = None
-        display_name:bool = True
-        name_padding:str = '.'
-    @dataclass
-    class File:
-        enable:bool = False
-        root_dir:Path | None = None
-        dirname:str | None = None
-        filename:str | None = None
-        format:str = r'%(asctime)s - [%(name)s%(channel)s] %(levelname)s: %(message)s'
-        default_level:int = LogLevel.INFO
-    @dataclass
-    class Stream:
-        enable:bool = True
-        format:str = r'%(asctime)s - [%(name)s]%(channel)s %(levelname)s: %(message)s'
-        default_level:int = LogLevel.INFO
     name:str | None = None
     extend_name:str | None = None
     share_global:bool = False
     default_channel_name:str = "default"
-    channel:Channel = Channel()
-    stream:Stream = Stream()
-    file:File = File()
+    channel:ChannelOption = field(default_factory=ChannelOption)
+    stream:StreamOption = field(default_factory=StreamOption)
+    file:FileOption = field(default_factory=FileOption)
 
 class LoggerInterface:
 
@@ -369,7 +373,7 @@ class LoggerMixin(LoggerInterface):
 
 class SimpleLogger(LoggerMixin):
     '''
-        [Deprecated] use LogiSphere insted
+        [Deprecated] use LoggerMixin insted
     '''
 
     # https://docs.python.org/zh-cn/3/library/logging.handlers.html#timedrotatingfilehandler
@@ -423,50 +427,3 @@ class SimpleLogger(LoggerMixin):
     @staticmethod
     def for_current_file():
         return SimpleLogger(os.path.basename(__file__))
-
-'''
-TODO: 实现一个LazySimpleLogger，用于在需要的时候才初始化SimpleLogger，
-      而不需要每次继承SimpleLogger时都显示地调用__init__方法。
-候选方案：
-    1. 首先在实现一个SimpleLogger.__getattr__
-        ```
-        def __getattr__(self, attr:str, *args, **kwargs):
-            return self.__getattribute__(attr)
-        ```
-    2. 然后在实现一个LazySimpleLogger，它的__getattr__方法中调用SimpleLogger.__getattr__
-        ```
-        class LazySimpleLogger(SimpleLogger):
-
-        _lazy_logger_initialized = False
-
-        def __getattr__(self, attr:str, *args, **kwargs):
-            if not SimpleLogger.__getattr__(self, '_lazy_logger_initialized'):
-                SimpleLogger.__setattr__(self, '_lazy_logger_initialized', True)
-                SimpleLogger.__init__(self)
-            return SimpleLogger.__getattr__(self, attr, *args, **kwargs)
-        ```
-该方案会对SimpleLogger的性能造成一定影响，因为增加了__getattr__这个方法，
-导致SimpleLogger的性能下降约20%。
-'''
-
-class LogMerger(TextIO):
-
-    def __init__(self):
-        self.__cached_line = None
-        self.__cache_hits = 0
-
-    def write(self, msg:Union[bytes, str]):
-        if msg.endswith('\n'): msg = msg[:-1]
-        if msg == self.__cached_line:
-            self.__cache_hits += 1
-            if isinstance(msg, str):
-                line_breaks = len(list(re.finditer(r'(\r\n|\r|\n)', msg)))
-                TerminalCursor.up(line_breaks)
-            TerminalCursor.up()
-            sys.stdout.write(f"{msg}(~{self.__cache_hits+1})")
-        else:
-            self.__cache_hits = 0
-            sys.stdout.write(msg)
-        sys.stdout.write('\n')
-        self.__cached_line = msg
-
